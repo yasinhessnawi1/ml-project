@@ -1,0 +1,256 @@
+# ML Project Configuration
+# Multimodal Genre Classification - MM-IMDb Dataset
+
+# General Settings
+project:
+  name: "multimodal-genre-classification"
+  seed: 42  # For reproducibility
+  device: "cuda"  # cuda / cpu / mps (Apple Silicon)
+
+# Paths
+paths:
+  data_dir: "data/raw"
+  processed_dir: "data/processed"
+  splits_dir: "data/splits"
+  models_dir: "models"
+  checkpoints_dir: "checkpoints"
+  results_dir: "results"
+  logs_dir: "logs"
+
+# Dataset Configuration
+dataset:
+  name: "mm-imdb"
+  data_dir: "data/processed"  # Use processed data directory
+  num_genres: 23  # MM-IMDb has 23 genres total
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  stratify: true  # Stratified split by genres
+
+  # Genre list (update based on actual dataset)
+  genres:
+    - "Action"
+    - "Adventure"
+    - "Animation"
+    - "Biography"
+    - "Comedy"
+    - "Crime"
+    - "Documentary"
+    - "Drama"
+    - "Family"
+    - "Fantasy"
+    - "Horror"
+    - "Music"
+    - "Mystery"
+    - "Romance"
+    - "Sci-Fi"
+    - "Thriller"
+    - "War"
+    - "Western"
+
+# Preprocessing Configuration
+preprocessing:
+  # Text preprocessing
+  text:
+    max_length_lstm: 256  # Based on 95th percentile (update after EDA)
+    max_length_bert: 512  # DistilBERT max sequence length
+    vocab_size: 10000  # For LSTM tokenizer
+    min_text_length: 10  # Minimum words in plot summary
+    lowercase: true  # For LSTM (not for BERT)
+    remove_html: true
+    embedding_dim: 300  # GloVe dimension
+
+  # Image preprocessing
+  image:
+    target_size: 224  # Standard for ImageNet models
+    resize_size: 256  # Resize before crop
+    min_image_size: 50  # Minimum width/height in pixels
+    normalization:
+      mean: [0.485, 0.456, 0.406]  # ImageNet mean (RGB)
+      std: [0.229, 0.224, 0.225]   # ImageNet std (RGB)
+
+  # Data augmentation (training only)
+  augmentation:
+    enabled: true
+    horizontal_flip_prob: 0.5
+    rotation_degrees: 10
+    color_jitter:
+      brightness: 0.2
+      contrast: 0.2
+      saturation: 0.2
+      hue: 0.1
+
+  # Labels
+  labels:
+    label_smoothing: 0.0  # 0 = no smoothing, 0.1 for experiments
+    threshold: 0.5  # Binary classification threshold at inference
+
+# Model Configurations
+
+# LSTM Text Model
+model_lstm:
+  type: "lstm_text"
+  embedding_dim: 300
+  hidden_dim: 256
+  num_layers: 2
+  bidirectional: true
+  dropout: 0.3
+  attention: true
+  pretrained_embeddings: "glove-6B-300d"  # or null for random init
+
+# DistilBERT Text Model
+model_distilbert:
+  type: "distilbert_text"
+  model_name: "distilbert-base-uncased"
+  classifier_hidden_dim: 256
+  dropout: 0.3
+  fine_tune_all: true  # true = fine-tune all layers, false = freeze encoder
+
+# ResNet Vision Model
+model_resnet:
+  type: "resnet_vision"
+  architecture: "resnet18"  # resnet18 / resnet50
+  pretrained: true
+  fine_tune_strategy: "unfreeze_layer3_layer4"  # all / last_layer / unfreeze_layer3_layer4
+  classifier_hidden_dim: 256
+  dropout: 0.5
+
+# Custom CNN Vision Model
+model_custom_cnn:
+  type: "custom_cnn"
+  channels: [64, 128, 256, 512]  # Channel progression
+  kernel_sizes: [7, 3, 3, 3]
+  dropout: 0.5
+
+# Early Fusion Model
+model_early_fusion:
+  type: "early_fusion"
+  text_model: "distilbert"  # lstm / distilbert
+  vision_model: "resnet18"  # resnet18 / resnet50 / custom_cnn
+  text_projection_dim: 512
+  vision_projection_dim: 512
+  fusion_hidden_dims: [1024, 512, 256]
+  dropout: [0.5, 0.3]  # Dropout for each fusion layer
+  activation: "relu"  # relu / gelu / mish
+
+# Late Fusion Model
+model_late_fusion:
+  type: "late_fusion"
+  text_model: "distilbert"
+  vision_model: "resnet18"
+  fusion_strategy: "learned_weighted_average"  # average / learned_weighted_average
+  alpha: 0.5  # Initial weight for text (if learned, this is starting value)
+
+# Attention Fusion Model
+model_attention_fusion:
+  type: "attention_fusion"
+  text_model: "distilbert"
+  vision_model: "resnet18"
+  attention_type: "cross_attention"  # cross_attention / self_attention
+  num_heads: 8
+  attention_dropout: 0.1
+  fusion_hidden_dim: 512
+
+# Training Configuration
+training:
+  # General
+  num_epochs: 50
+  batch_size: 32
+  num_workers: 4  # DataLoader workers
+  pin_memory: true
+
+  # Optimization
+  optimizer: "adamw"  # adamw / adam / sgd
+  learning_rate:
+    from_scratch: 0.001  # For models trained from scratch (LSTM, Custom CNN)
+    fine_tune: 0.0001  # For fine-tuning pretrained models
+    bert_fine_tune: 0.00002  # Lower LR for BERT fine-tuning (2e-5)
+  weight_decay: 0.01
+  betas: [0.9, 0.999]  # Adam beta parameters
+  eps: 0.00000001  # Adam epsilon (1e-8)
+
+  # Gradient handling
+  gradient_clip: 1.0  # Max gradient norm
+  gradient_accumulation_steps: 1  # Accumulate gradients (effective batch size multiplier)
+
+  # Mixed precision
+  mixed_precision: true  # Use AMP for faster training
+
+  # Learning rate scheduling
+  scheduler:
+    type: "reduce_on_plateau"  # reduce_on_plateau / cosine_annealing / one_cycle
+    factor: 0.5  # ReduceLROnPlateau: multiply LR by this on plateau
+    patience: 5  # ReduceLROnPlateau: epochs to wait
+    min_lr: 0.000001  # Minimum learning rate (1e-6)
+
+    # For CosineAnnealing
+    T_0: 10  # Period of first restart
+    T_mult: 2  # Multiply period after restart
+
+  # Regularization
+  early_stopping:
+    enabled: true
+    patience: 10  # Stop if no improvement for N epochs
+    metric: "f1_macro"  # Metric to monitor
+    mode: "max"  # max for f1, min for loss
+
+  # Checkpointing
+  checkpoint:
+    save_best: true
+    save_every_n_epochs: 5  # Save periodic checkpoints
+    keep_last_n: 3  # Keep last N checkpoints
+
+# Loss Function Configuration
+loss:
+  type: "bce"  # bce / focal / weighted_bce
+
+  # Focal Loss parameters (if type=focal)
+  focal:
+    alpha: 0.25
+    gamma: 2.0
+
+  # Weighted BCE (if type=weighted_bce)
+  weighted_bce:
+    compute_weights: true  # Auto-compute from training data
+    pos_weights: null  # Or provide manual weights [w1, w2, ..., w18]
+
+# Evaluation Metrics
+evaluation:
+  metrics:
+    - "f1_macro"  # Primary metric
+    - "f1_micro"
+    - "f1_weighted"
+    - "precision_macro"
+    - "recall_macro"
+    - "hamming_loss"
+    - "accuracy"  # Exact match accuracy
+    - "per_class_f1"  # F1 for each genre
+
+  threshold: 0.5  # Binary classification threshold
+
+# Logging & Tracking
+logging:
+  log_every_n_steps: 10  # Log training metrics every N batches
+  use_tensorboard: true
+  tensorboard_dir: "runs"
+  use_wandb: false  # Set to true if using Weights & Biases
+  wandb_project: "multimodal-genre-classification"
+  wandb_entity: null  # Your wandb username
+
+# Experiment Configuration
+experiment:
+  name: "baseline"  # Experiment name (will create subdirectory)
+  description: "Baseline multimodal fusion experiment"
+  tags: ["early_fusion", "distilbert", "resnet18"]
+  notes: ""
+
+# Reproducibility
+reproducibility:
+  deterministic: true  # Set cudnn.deterministic = True
+  benchmark: false  # Set cudnn.benchmark = False (slower but reproducible)
+
+# Hardware
+hardware:
+  cuda_visible_devices: "0"  # Which GPU to use
+  num_gpus: 1
+  distributed: false  # Distributed training (multi-GPU)

@@ -1,0 +1,64 @@
+# ML Project Requirements
+# Python 3.8+
+
+# Deep Learning Framework
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+
+# Transformers for BERT/DistilBERT
+transformers>=4.30.0
+tokenizers>=0.13.0
+
+# Data Processing
+numpy>=1.24.0
+pandas>=2.0.0
+Pillow>=9.5.0
+scikit-learn>=1.3.0
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.14.0
+
+# Progress Bars & Utilities
+tqdm>=4.65.0
+pyyaml>=6.0
+
+# Experiment Tracking & Logging
+tensorboard>=2.13.0
+# wandb>=0.15.0  # Optional: Uncomment for Weights & Biases
+
+# Jupyter for Notebooks
+jupyter>=1.0.0
+notebook>=6.5.0
+ipywidgets>=8.0.0
+
+# Natural Language Processing (Optional)
+nltk>=3.8
+# spacy>=3.5.0  # Optional: Uncomment if using spaCy
+
+# Testing
+pytest>=7.3.0
+pytest-cov>=4.1.0
+
+# Code Quality (Optional)
+# black>=23.3.0
+# flake8>=6.0.0
+# mypy>=1.3.0
+
+# Additional Utilities
+python-dotenv>=1.0.0  # For environment variables
+
+# For downloading pretrained embeddings (if using GloVe)
+# wget>=3.2  # Alternative: use torchtext
+
+# Image Processing
+opencv-python>=4.7.0  # Optional: for advanced image processing
+
+# Metrics & Evaluation
+scikit-image>=0.21.0  # Optional: for image quality metrics
+flake8>=6.0.0
+black>=23.3.0
+h5py
