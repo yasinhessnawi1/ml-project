@@ -223,6 +223,7 @@ def main():
         optimal_thresholds = {
             'bert_text': 0.28,  # From threshold tuning (F1: 59.02%)
             'lstm_text': 0.34,  # From threshold tuning (F1: 45.53%)
+            # resnet_vision uses default 0.5 (best.pth had wrong epoch)
         }
         if model_type in optimal_thresholds:
             args.threshold = optimal_thresholds[model_type]

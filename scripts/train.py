@@ -553,7 +553,8 @@ def main():
     loss_config = config['loss'].copy()
 
     # Load class weights if using weighted BCE
-    if loss_config.get('type') == 'weighted_bce' and loss_config.get('compute_weights', False):
+    weighted_bce_config = loss_config.get('weighted_bce', {})
+    if loss_config.get('type') == 'weighted_bce' and weighted_bce_config.get('compute_weights', False):
         weights_path = Path(config['dataset']['data_dir']) / 'class_weights.json'
         if weights_path.exists():
             print(f"Loading class weights from {weights_path}")
