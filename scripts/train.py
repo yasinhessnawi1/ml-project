@@ -578,12 +578,12 @@ def main():
         # Use BERT-specific learning rate
         lr = optimizer_config['learning_rate'].get('bert_fine_tune', 0.00002)
         print(f"Using BERT fine-tuning LR: {lr}")
-    elif 'resnet' in args.model.lower() or 'vision' in args.model.lower():
-        # Use fine-tuning LR for pretrained vision models
+    elif 'resnet' in args.model.lower():
+        # Use fine-tuning LR for pretrained ResNet models
         lr = optimizer_config['learning_rate'].get('fine_tune', 0.0001)
         print(f"Using fine-tuning LR: {lr}")
     else:
-        # Use from-scratch LR for LSTM and custom models
+        # Use from-scratch LR for LSTM, custom CNN, and other models
         lr = optimizer_config['learning_rate'].get('from_scratch', 0.0003)
         print(f"Using from-scratch LR: {lr}")
 
