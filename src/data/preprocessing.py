@@ -221,25 +221,73 @@ class LSTMTokenizer:
         return " ".join(words)
 
 
+class BERTTokenizerWrapper:
+    """
+    Wrapper for BERT tokenizer to ensure consistent output format.
+
+    This wrapper ensures that the tokenizer returns tensors of consistent size
+    by applying padding and truncation.
+    """
+
+    def __init__(self, tokenizer: DistilBertTokenizer, max_length: int = 512):
+        """
+        Initialize BERT tokenizer wrapper.
+
+        Args:
+            tokenizer: Pre-trained DistilBERT tokenizer
+            max_length: Maximum sequence length
+        """
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.vocab = tokenizer  # For compatibility with LSTM tokenizer interface
+
+    def __call__(self, text: str) -> dict:
+        """
+        Tokenize text and return dict with tensors.
+
+        Args:
+            text: Input text
+
+        Returns:
+            Dictionary with 'input_ids' and 'attention_mask' tensors
+        """
+        encoding = self.tokenizer(
+            text,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
+
+        # Return squeezed tensors (remove batch dimension added by return_tensors='pt')
+        return {
+            'input_ids': encoding['input_ids'].squeeze(0),  # Shape: (max_length,)
+            'attention_mask': encoding['attention_mask'].squeeze(0)  # Shape: (max_length,)
+        }
+
+
 def get_bert_tokenizer(
     model_name: str = "distilbert-base-uncased",
-) -> DistilBertTokenizer:
+    max_length: int = 512,
+) -> BERTTokenizerWrapper:
     """
-    Get pretrained BERT tokenizer.
+    Get pretrained BERT tokenizer wrapped for consistent output.
 
     Args:
         model_name (str, optional): Hugging Face model name.
             Defaults to 'distilbert-base-uncased'.
+        max_length (int, optional): Maximum sequence length. Defaults to 512.
 
     Returns:
-        DistilBertTokenizer: Pretrained tokenizer
+        BERTTokenizerWrapper: Wrapped pretrained tokenizer
 
     Example:
         >>> tokenizer = get_bert_tokenizer()
-        >>> encoding = tokenizer("A thrilling movie", max_length=512,
-        ...                      padding='max_length', truncation=True)
+        >>> output = tokenizer("A thrilling movie")
+        >>> print(output['input_ids'].shape)  # torch.Size([512])
     """
-    return DistilBertTokenizer.from_pretrained(model_name)
+    base_tokenizer = DistilBertTokenizer.from_pretrained(model_name)
+    return BERTTokenizerWrapper(base_tokenizer, max_length=max_length)
 
 
 # ============================================================================
@@ -267,21 +315,24 @@ def load_image(
         (500, 750)
     """
     try:
+        # Convert to string to avoid Path circular reference in Python 3.12 Windows
+        image_path_str = str(image_path)
+
         # Load image
-        img = Image.open(image_path)
+        img = Image.open(image_path_str)
 
         # Convert to RGB (handles grayscale and RGBA)
         img = img.convert("RGB")
 
         # Check minimum size
         if img.size[0] < min_size or img.size[1] < min_size:
-            print(f"Warning: Image too small ({img.size}): {image_path}")
+            print(f"Warning: Image too small ({img.size}): {image_path_str}")
             return None
 
         return img
 
     except Exception as e:
-        print(f"Error loading image {image_path}: {e}")
+        print(f"Error loading image {image_path_str if 'image_path_str' in locals() else image_path}: {e}")
         return None
 
 

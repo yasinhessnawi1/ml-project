@@ -12,6 +12,7 @@ Classes:
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
@@ -114,12 +115,16 @@ class MultimodalDataset(Dataset):
         """
         metadata_file = self.data_dir / f"{self.split}.json"
 
-        if not metadata_file.exists():
+        # Convert to string to avoid Path circular reference in Python 3.12 Windows
+        metadata_file_str = str(metadata_file)
+
+        # Use os.path.exists instead of Path.exists() to avoid circular reference
+        if not os.path.exists(metadata_file_str):
             raise FileNotFoundError(
-                f"Metadata file not found: {metadata_file}"
+                f"Metadata file not found: {metadata_file_str}"
             )
 
-        with open(metadata_file, "r") as f:
+        with open(metadata_file_str, "r") as f:
             metadata = json.load(f)
 
         samples = []
@@ -132,39 +137,40 @@ class MultimodalDataset(Dataset):
             #     'genres': ['Action', 'Drama', ...]
             # }
 
-            # Build file paths
+            # Build file paths - store as strings to avoid Path circular reference in Python 3.12 Windows
             movie_id = item["id"]
-            text_path = self.data_dir / item.get(
+            text_path_str = str(self.data_dir / item.get(
                 "plot", f"{movie_id}/plot.txt"
-            )
-            image_path = self.data_dir / item.get(
+            ))
+            image_path_str = str(self.data_dir / item.get(
                 "poster", f"{movie_id}/poster.jpg"
-            )
+            ))
 
             samples.append(
                 {
                     "id": movie_id,
-                    "text_path": text_path,
-                    "image_path": image_path,
+                    "text_path": text_path_str,
+                    "image_path": image_path_str,
                     "genres": item["genres"],
                 }
             )
 
         return samples
 
-    def _load_text(self, text_path: Path) -> Optional[str]:
+    def _load_text(self, text_path: str) -> Optional[str]:
         """
         Load text from file.
 
         Args:
-            text_path (Path): Path to text file
+            text_path (str): Path to text file
 
         Returns:
             Optional[str]: Text content, or None if loading fails
         """
         try:
-            if not text_path.exists():
-                logger.warning(f"Text file not found: {text_path}")
+            # Path is already a string, no conversion needed
+            if not os.path.exists(text_path):
+                print(f"Warning: Text file not found: {text_path}")
                 return None
 
             with open(
@@ -178,15 +184,13 @@ class MultimodalDataset(Dataset):
             # Check minimum length
             word_count = len(text.split())
             if word_count < self.min_text_length:
-                logger.warning(
-                    f"Text too short ({word_count} words): {text_path}"
-                )
+                print(f"Warning: Text too short ({word_count} words): {text_path}")
                 return None
 
             return text
 
         except Exception as e:
-            logger.error(f"Error loading text {text_path}: {e}")
+            print(f"Error loading text {text_path}: {e}")
             self.error_count += 1
             return None
 
@@ -194,12 +198,13 @@ class MultimodalDataset(Dataset):
         """Return number of samples in dataset."""
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Optional[Dict[str, torch.Tensor]]:
+    def __getitem__(self, idx: int, _recursion_depth: int = 0) -> Optional[Dict[str, torch.Tensor]]:
         """
         Get a single sample.
 
         Args:
             idx (int): Sample index
+            _recursion_depth (int): Internal recursion counter
 
         Returns:
             Optional[Dict[str, torch.Tensor]]: Dictionary containing:
@@ -212,6 +217,13 @@ class MultimodalDataset(Dataset):
         Raises:
             IndexError: If idx is out of bounds
         """
+        # Prevent infinite recursion
+        if _recursion_depth > len(self):
+            raise RuntimeError(
+                f"Could not load any valid samples after trying {_recursion_depth} attempts. "
+                f"Check that text and image files exist in {self.data_dir}"
+            )
+
         if idx >= len(self.samples):
             raise IndexError(
                 f"Index {idx} out of range for dataset of size {len(self)}"
@@ -225,7 +237,7 @@ class MultimodalDataset(Dataset):
             if self.skip_missing:
                 self.skipped_count += 1
                 # Return next sample (recursive call with bounds check)
-                return self.__getitem__((idx + 1) % len(self))
+                return self.__getitem__((idx + 1) % len(self), _recursion_depth + 1)
             else:
                 # Use placeholder text
                 text = "No summary available."
@@ -238,7 +250,7 @@ class MultimodalDataset(Dataset):
         if image is None:
             if self.skip_missing:
                 self.skipped_count += 1
-                return self.__getitem__((idx + 1) % len(self))
+                return self.__getitem__((idx + 1) % len(self), _recursion_depth + 1)
             else:
                 # Use blank image
                 image = Image.new("RGB", (224, 224), color=(0, 0, 0))
@@ -323,35 +335,41 @@ class TextOnlyDataset(Dataset):
         """Load metadata (same as MultimodalDataset)."""
         metadata_file = self.data_dir / f"{self.split}.json"
 
-        if not metadata_file.exists():
+        # Convert to string to avoid Path circular reference in Python 3.12 Windows
+        metadata_file_str = str(metadata_file)
+
+        # Use os.path.exists instead of Path.exists() to avoid circular reference
+        if not os.path.exists(metadata_file_str):
             raise FileNotFoundError(
-                f"Metadata file not found: {metadata_file}"
+                f"Metadata file not found: {metadata_file_str}"
             )
 
-        with open(metadata_file, "r") as f:
+        with open(metadata_file_str, "r") as f:
             metadata = json.load(f)
 
         samples = []
         for item in metadata:
             movie_id = item["id"]
-            text_path = self.data_dir / item.get(
+            # Store as string to avoid Path circular reference in Python 3.12 Windows
+            text_path_str = str(self.data_dir / item.get(
                 "plot", f"{movie_id}/plot.txt"
-            )
+            ))
 
             samples.append(
                 {
                     "id": movie_id,
-                    "text_path": text_path,
+                    "text_path": text_path_str,
                     "genres": item["genres"],
                 }
             )
 
         return samples
 
-    def _load_text(self, text_path: Path) -> Optional[str]:
+    def _load_text(self, text_path: str) -> Optional[str]:
         """Load and validate text."""
         try:
-            if not text_path.exists():
+            # Path is already a string, no conversion needed
+            if not os.path.exists(text_path):
                 return None
 
             with open(
@@ -367,36 +385,55 @@ class TextOnlyDataset(Dataset):
             return text
 
         except Exception as e:
-            logger.error(f"Error loading text {text_path}: {e}")
+            # Avoid using logger to prevent recursion in error handling
+            print(f"Error loading text {text_path}: {e}")
             return None
 
     def __len__(self) -> int:
         """Return number of samples."""
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int, _recursion_depth: int = 0) -> Dict[str, torch.Tensor]:
         """Get a single text sample."""
+        # Prevent infinite recursion
+        if _recursion_depth > len(self):
+            raise RuntimeError(
+                f"Could not load any valid samples after trying {_recursion_depth} attempts. "
+                f"Check that text files exist in {self.data_dir}"
+            )
+
         sample = self.samples[idx]
 
         # Load text
         text = self._load_text(sample["text_path"])
         if text is None:
             # Recursively get next valid sample
-            return self.__getitem__((idx + 1) % len(self))
+            return self.__getitem__((idx + 1) % len(self), _recursion_depth + 1)
 
         # Tokenize
-        text_tensor = self.text_tokenizer(text)
+        text_output = self.text_tokenizer(text)
 
         # Encode labels
         labels = encode_genres(
             sample["genres"], self.genre_to_idx, self.num_genres
         )
 
-        return {
-            "text": text_tensor,
-            "labels": labels,
-            "movie_id": sample["id"],
-        }
+        # Handle BERT tokenizer (returns dict) vs LSTM tokenizer (returns tensor)
+        if isinstance(text_output, dict):
+            # BERT tokenizer - unpack input_ids and attention_mask
+            return {
+                "text": text_output['input_ids'],
+                "attention_mask": text_output['attention_mask'],
+                "labels": labels,
+                "movie_id": sample["id"],
+            }
+        else:
+            # LSTM tokenizer - returns tensor directly
+            return {
+                "text": text_output,
+                "labels": labels,
+                "movie_id": sample["id"],
+            }
 
 
 class ImageOnlyDataset(Dataset):
@@ -447,25 +484,30 @@ class ImageOnlyDataset(Dataset):
         """Load metadata (same as MultimodalDataset)."""
         metadata_file = self.data_dir / f"{self.split}.json"
 
-        if not metadata_file.exists():
+        # Convert to string to avoid Path circular reference in Python 3.12 Windows
+        metadata_file_str = str(metadata_file)
+
+        # Use os.path.exists instead of Path.exists() to avoid circular reference
+        if not os.path.exists(metadata_file_str):
             raise FileNotFoundError(
-                f"Metadata file not found: {metadata_file}"
+                f"Metadata file not found: {metadata_file_str}"
             )
 
-        with open(metadata_file, "r") as f:
+        with open(metadata_file_str, "r") as f:
             metadata = json.load(f)
 
         samples = []
         for item in metadata:
             movie_id = item["id"]
-            image_path = self.data_dir / item.get(
+            # Store as string to avoid Path circular reference in Python 3.12 Windows
+            image_path_str = str(self.data_dir / item.get(
                 "poster", f"{movie_id}/poster.jpg"
-            )
+            ))
 
             samples.append(
                 {
                     "id": movie_id,
-                    "image_path": image_path,
+                    "image_path": image_path_str,
                     "genres": item["genres"],
                 }
             )
@@ -476,15 +518,22 @@ class ImageOnlyDataset(Dataset):
         """Return number of samples."""
         return len(self.samples)
 
-    def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
+    def __getitem__(self, idx: int, _recursion_depth: int = 0) -> Dict[str, torch.Tensor]:
         """Get a single image sample."""
+        # Prevent infinite recursion
+        if _recursion_depth > len(self):
+            raise RuntimeError(
+                f"Could not load any valid samples after trying {_recursion_depth} attempts. "
+                f"Check that image files exist in {self.data_dir}"
+            )
+
         sample = self.samples[idx]
 
         # Load image
         image = load_image(sample["image_path"])
         if image is None:
             # Use blank image or get next sample
-            return self.__getitem__((idx + 1) % len(self))
+            return self.__getitem__((idx + 1) % len(self), _recursion_depth + 1)
 
         # Transform image
         image_tensor = self.image_transform(image)

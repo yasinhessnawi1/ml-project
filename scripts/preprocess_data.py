@@ -346,6 +346,7 @@ def save_samples(
     samples: List[Dict],
     output_dir: Path,
     split_name: str,
+    ix_to_word: Dict[int, str] = None,
     skip_images: bool = False
 ) -> None:
     """
@@ -355,6 +356,7 @@ def save_samples(
         samples (List[Dict]): Samples to save
         output_dir (Path): Output directory
         split_name (str): Split name (train/val/test)
+        ix_to_word (Dict[int, str]): Index to word mapping for detokenization
         skip_images (bool): Skip saving images
     """
     split_dir = output_dir / split_name
@@ -362,14 +364,28 @@ def save_samples(
 
     print(f"\nSaving {split_name} samples to {split_dir}...")
 
+    # Prepare metadata list for the split JSON file
+    split_metadata = []
+
     for sample in tqdm(samples, desc=f"Saving {split_name}"):
         # Create sample directory
         sample_dir = split_dir / sample['imdb_id']
         sample_dir.mkdir(exist_ok=True)
 
-        # Save tokenized sequence
+        # Save tokenized sequence as numpy array
         sequence_path = sample_dir / 'plot.npy'
         np.save(sequence_path, np.array(sample['sequence']))
+
+        # Detokenize and save as text file (for Dataset compatibility)
+        if ix_to_word is not None:
+            try:
+                words = [ix_to_word.get(idx, '<UNK>') for idx in sample['sequence']]
+                text = ' '.join(words)
+                text_path = sample_dir / 'plot.txt'
+                with open(text_path, 'w', encoding='utf-8') as f:
+                    f.write(text)
+            except Exception as e:
+                print(f"Warning: Could not save detokenized text for {sample['imdb_id']}: {e}")
 
         # Save poster image
         if not skip_images and sample['image'] is not None:
@@ -380,7 +396,7 @@ def save_samples(
             except Exception as e:
                 print(f"Warning: Could not save poster for {sample['imdb_id']}: {e}")
 
-        # Save metadata
+        # Save individual sample metadata
         metadata = {
             'imdb_id': sample['imdb_id'],
             'genres': sample['genres'],
@@ -389,6 +405,21 @@ def save_samples(
         metadata_path = sample_dir / 'metadata.json'
         with open(metadata_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=2)
+
+        # Add to split metadata list (for Dataset class)
+        # Include split_name in path so Dataset can find files in train/val/test subdirectories
+        split_metadata.append({
+            'id': sample['imdb_id'],
+            'plot': f"{split_name}/{sample['imdb_id']}/plot.txt",
+            'poster': f"{split_name}/{sample['imdb_id']}/poster.jpg",
+            'genres': sample['genres']
+        })
+
+    # Save split metadata JSON file (required by Dataset classes)
+    split_json_path = output_dir / f'{split_name}.json'
+    with open(split_json_path, 'w', encoding='utf-8') as f:
+        json.dump(split_metadata, f, indent=2)
+    print(f"Split metadata saved to {split_json_path}")
 
 
 def compute_statistics(
@@ -541,9 +572,12 @@ def main():
     print("SAVING PROCESSED DATA")
     print("="*80)
 
-    save_samples(train_samples, output_dir, 'train', args.skip_images)
-    save_samples(val_samples, output_dir, 'val', args.skip_images)
-    save_samples(test_samples, output_dir, 'test', args.skip_images)
+    # Get ix_to_word for detokenization
+    ix_to_word = metadata.get('ix_to_word', {})
+
+    save_samples(train_samples, output_dir, 'train', ix_to_word, args.skip_images)
+    save_samples(val_samples, output_dir, 'val', ix_to_word, args.skip_images)
+    save_samples(test_samples, output_dir, 'test', ix_to_word, args.skip_images)
 
     # Compute statistics
     stats = compute_statistics(train_samples, val_samples, test_samples, genre_names, output_dir)

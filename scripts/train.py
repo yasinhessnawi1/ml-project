@@ -63,13 +63,8 @@ from src.utils.visualization import (
 )
 
 
-# MM-IMDb genre names
-GENRE_NAMES = [
-    'Action', 'Adventure', 'Animation', 'Biography', 'Comedy',
-    'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy',
-    'History', 'Horror', 'Music', 'Mystery', 'Romance',
-    'Sci-Fi', 'Sport', 'Thriller'
-]
+# MM-IMDb genre names will be loaded from genre_mapping.json
+# This ensures consistency with the preprocessing output
 
 
 def parse_args():
@@ -180,22 +175,27 @@ def prepare_data(config, model_type, device):
         if 'bert' in model_type:
             # BERT tokenizer
             print("Loading BERT tokenizer...")
+            max_length = config['preprocessing']['text'].get('max_length_bert', 512)
             tokenizer = get_bert_tokenizer(
-                model_name=config['models']['text'].get('model_name', 'distilbert-base-uncased')
+                model_name=config['model_distilbert'].get('model_name', 'distilbert-base-uncased'),
+                max_length=max_length
             )
             vocab_or_tokenizer = tokenizer
             text_tokenizer_fn = tokenizer
         else:
-            # LSTM tokenizer - need to build vocabulary from training data
-            print("Building vocabulary from training data...")
-            # For now, we'll use a simple tokenizer
-            # In practice, you would build vocab from actual training text
-            vocab_size = config['preprocessing']['text']['vocab_size']
-            max_length = config['preprocessing']['text']['max_length_lstm']
+            # LSTM tokenizer - load vocabulary from preprocessed data
+            print("Loading vocabulary from preprocessed data...")
+            vocab_path = Path(data_dir) / 'vocab.json'
+            with open(vocab_path, 'r') as f:
+                vocab_data = json.load(f)
 
-            # Placeholder: In real implementation, build from actual training data
+            # Extract word_to_ix mapping (the actual vocabulary)
+            vocab = vocab_data.get('word_to_ix', vocab_data)
+            print(f"Loaded vocabulary with {len(vocab)} words")
+
+            max_length = config['preprocessing']['text']['max_length_lstm']
             tokenizer = LSTMTokenizer(
-                vocab={'<PAD>': 0, '<UNK>': 1},  # Minimal vocab for demo
+                vocab=vocab,
                 max_length=max_length
             )
             vocab_or_tokenizer = tokenizer
@@ -216,8 +216,12 @@ def prepare_data(config, model_type, device):
         train_transform = None
         val_transform = None
 
-    # Create genre to index mapping
-    genre_to_idx = {genre: i for i, genre in enumerate(GENRE_NAMES)}
+    # Load genre to index mapping from preprocessed data
+    print("Loading genre mapping...")
+    genre_mapping_path = Path(data_dir) / 'genre_mapping.json'
+    with open(genre_mapping_path, 'r') as f:
+        genre_to_idx = json.load(f)
+    print(f"Loaded {len(genre_to_idx)} genres from {genre_mapping_path}")
 
     # Create datasets
     print("\nCreating datasets...")
@@ -251,19 +255,19 @@ def prepare_data(config, model_type, device):
         train_dataset = TextOnlyDataset(
             data_dir=data_dir,
             split='train',
-            tokenizer=text_tokenizer_fn,
+            text_tokenizer=text_tokenizer_fn,
             genre_to_idx=genre_to_idx
         )
         val_dataset = TextOnlyDataset(
             data_dir=data_dir,
             split='val',
-            tokenizer=text_tokenizer_fn,
+            text_tokenizer=text_tokenizer_fn,
             genre_to_idx=genre_to_idx
         )
         test_dataset = TextOnlyDataset(
             data_dir=data_dir,
             split='test',
-            tokenizer=text_tokenizer_fn,
+            text_tokenizer=text_tokenizer_fn,
             genre_to_idx=genre_to_idx
         )
 
@@ -272,19 +276,19 @@ def prepare_data(config, model_type, device):
         train_dataset = ImageOnlyDataset(
             data_dir=data_dir,
             split='train',
-            transform=train_transform,
+            image_transform=train_transform,
             genre_to_idx=genre_to_idx
         )
         val_dataset = ImageOnlyDataset(
             data_dir=data_dir,
             split='val',
-            transform=val_transform,
+            image_transform=val_transform,
             genre_to_idx=genre_to_idx
         )
         test_dataset = ImageOnlyDataset(
             data_dir=data_dir,
             split='test',
-            transform=val_transform,
+            image_transform=val_transform,
             genre_to_idx=genre_to_idx
         )
 
@@ -294,25 +298,29 @@ def prepare_data(config, model_type, device):
 
     # Create dataloaders
     print("\nCreating dataloaders...")
+    # todo: add num_workers for windows
+    # Note: Using num_workers=0 on Windows to avoid multiprocessing issues with Path objects
+    num_workers = 0 if device.type == 'cuda' else config['training'].get('num_workers', 0)
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=config['training'].get('num_workers', 4),
+        num_workers=num_workers,
         pin_memory=True if device.type == 'cuda' else False
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=config['training'].get('num_workers', 4),
+        num_workers=num_workers,
         pin_memory=True if device.type == 'cuda' else False
     )
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=config['training'].get('num_workers', 4),
+        num_workers=num_workers,
         pin_memory=True if device.type == 'cuda' else False
     )
 
@@ -345,34 +353,49 @@ def create_model(config, model_type, vocab_or_tokenizer, device):
     if model_type == 'lstm_text':
         # LSTM text model
         print("Creating LSTM text model...")
-        model_config = config['models']['text']
-        model_config['type'] = 'lstm_text'
+        model_config = config['model_lstm'].copy()
         model_config['num_classes'] = num_classes
 
         vocab_size = len(vocab_or_tokenizer.vocab) if hasattr(vocab_or_tokenizer, 'vocab') else 10000
+
+        # Load GloVe embeddings if specified
+        pretrained_embeddings = None
+        if model_config.get('pretrained_embeddings') and model_config['pretrained_embeddings'] != 'null':
+            from src.utils.embeddings import create_embedding_matrix
+
+            print(f"\nLoading pretrained embeddings: {model_config['pretrained_embeddings']}")
+            embedding_dim = model_config.get('embedding_dim', 300)
+
+            embeddings, emb_info = create_embedding_matrix(
+                vocab=vocab_or_tokenizer.vocab,
+                embedding_dim=embedding_dim,
+                use_pretrained=True
+            )
+
+            pretrained_embeddings = embeddings
+            print(f"Pretrained embeddings loaded: {emb_info['coverage']:.2f}% coverage")
+
+        model_config['pretrained_embeddings'] = pretrained_embeddings
         model = create_text_model(model_config, vocab_size=vocab_size)
 
     elif model_type == 'bert_text':
         # DistilBERT text model
         print("Creating DistilBERT text model...")
-        model_config = config['models']['text']
-        model_config['type'] = 'distilbert_text'
+        model_config = config['model_distilbert'].copy()
         model_config['num_classes'] = num_classes
         model = create_text_model(model_config)
 
     elif model_type == 'resnet_vision':
         # ResNet vision model
         print("Creating ResNet vision model...")
-        model_config = config['models']['vision']
-        model_config['type'] = 'resnet'
+        model_config = config['model_resnet'].copy()
         model_config['num_classes'] = num_classes
         model = create_vision_model(model_config)
 
     elif model_type == 'cnn_vision':
         # Custom CNN vision model
         print("Creating Custom CNN vision model...")
-        model_config = config['models']['vision']
-        model_config['type'] = 'custom_cnn'
+        model_config = config['model_custom_cnn'].copy()
         model_config['num_classes'] = num_classes
         model = create_vision_model(model_config)
 
@@ -380,22 +403,50 @@ def create_model(config, model_type, vocab_or_tokenizer, device):
         # Multimodal fusion models
         print(f"Creating {model_type.replace('_', ' ').title()} model...")
 
+        # Get fusion config
+        fusion_config = config[f'model_{model_type}'].copy()
+
+        # Determine which text and vision models to use
+        text_model_type = fusion_config.get('text_model', 'distilbert')
+        vision_model_type = fusion_config.get('vision_model', 'resnet18')
+
         # Create text model
-        text_config = config['models']['text']
-        text_config['num_classes'] = num_classes
-        if 'bert' in text_config.get('type', ''):
+        if 'bert' in text_model_type or 'distilbert' in text_model_type:
+            text_config = config['model_distilbert'].copy()
+            text_config['num_classes'] = num_classes
             text_model = create_text_model(text_config)
-        else:
+        else:  # lstm
+            text_config = config['model_lstm'].copy()
+            text_config['num_classes'] = num_classes
             vocab_size = len(vocab_or_tokenizer.vocab) if hasattr(vocab_or_tokenizer, 'vocab') else 10000
+
+            # Load GloVe embeddings if specified
+            pretrained_embeddings = None
+            if text_config.get('pretrained_embeddings') and text_config['pretrained_embeddings'] != 'null':
+                from src.utils.embeddings import create_embedding_matrix
+
+                print(f"\nLoading pretrained embeddings for fusion model: {text_config['pretrained_embeddings']}")
+                embedding_dim = text_config.get('embedding_dim', 300)
+
+                embeddings, emb_info = create_embedding_matrix(
+                    vocab=vocab_or_tokenizer.vocab,
+                    embedding_dim=embedding_dim,
+                    use_pretrained=True
+                )
+
+                pretrained_embeddings = embeddings
+                print(f"Pretrained embeddings loaded: {emb_info['coverage']:.2f}% coverage")
+
+            text_config['pretrained_embeddings'] = pretrained_embeddings
             text_model = create_text_model(text_config, vocab_size=vocab_size)
 
         # Create vision model
-        vision_config = config['models']['vision']
+        if 'custom' in vision_model_type or 'cnn' in vision_model_type:
+            vision_config = config['model_custom_cnn'].copy()
+        else:  # resnet
+            vision_config = config['model_resnet'].copy()
         vision_config['num_classes'] = num_classes
         vision_model = create_vision_model(vision_config)
-
-        # Create fusion model
-        fusion_config = config['models']['fusion']
 
         if model_type == 'early_fusion':
             model = EarlyFusionModel(
@@ -413,7 +464,7 @@ def create_model(config, model_type, vocab_or_tokenizer, device):
                 text_model=text_model,
                 vision_model=vision_model,
                 num_classes=num_classes,
-                fusion_strategy=fusion_config.get('strategy', 'average')
+                fusion_strategy=fusion_config.get('fusion_strategy', 'average')
             )
 
         else:  # attention_fusion
@@ -424,7 +475,7 @@ def create_model(config, model_type, vocab_or_tokenizer, device):
                 text_projection_dim=fusion_config.get('text_projection_dim', 512),
                 vision_projection_dim=fusion_config.get('vision_projection_dim', 512),
                 fusion_hidden_dims=fusion_config.get('fusion_hidden_dims', [1024, 512, 256]),
-                num_attention_heads=fusion_config.get('num_attention_heads', 8),
+                num_attention_heads=fusion_config.get('num_heads', 8),
                 dropout=fusion_config.get('dropout', 0.3)
             )
 
@@ -499,12 +550,44 @@ def main():
     print("SETTING UP TRAINING")
     print("="*80)
 
-    loss_config = config['training']['loss']
+    loss_config = config['loss'].copy()
+
+    # Load class weights if using weighted BCE
+    if loss_config.get('type') == 'weighted_bce' and loss_config.get('compute_weights', False):
+        weights_path = Path(config['dataset']['data_dir']) / 'class_weights.json'
+        if weights_path.exists():
+            print(f"Loading class weights from {weights_path}")
+            with open(weights_path, 'r') as f:
+                weights_data = json.load(f)
+            pos_weights = torch.FloatTensor(weights_data['pos_weights'])
+            loss_config['pos_weight'] = pos_weights
+            print(f"Loaded {len(pos_weights)} class weights")
+            print(f"Weight range: {pos_weights.min():.2f} - {pos_weights.max():.2f}")
+        else:
+            print(f"Warning: compute_weights=True but {weights_path} not found!")
+            print("Run: python scripts/compute_class_weights.py")
+
     loss_fn = get_loss_function(loss_config, device=device)
     print(f"Loss function: {type(loss_fn).__name__}")
 
     # Create optimizer
-    optimizer_config = config['training']['optimizer']
+    optimizer_config = config['training'].copy()
+
+    # Select appropriate learning rate based on model type
+    if 'bert' in args.model.lower():
+        # Use BERT-specific learning rate
+        lr = optimizer_config['learning_rate'].get('bert_fine_tune', 0.00002)
+        print(f"Using BERT fine-tuning LR: {lr}")
+    elif 'resnet' in args.model.lower() or 'vision' in args.model.lower():
+        # Use fine-tuning LR for pretrained vision models
+        lr = optimizer_config['learning_rate'].get('fine_tune', 0.0001)
+        print(f"Using fine-tuning LR: {lr}")
+    else:
+        # Use from-scratch LR for LSTM and custom models
+        lr = optimizer_config['learning_rate'].get('from_scratch', 0.0003)
+        print(f"Using from-scratch LR: {lr}")
+
+    optimizer_config['lr'] = lr
     optimizer = create_optimizer(model, optimizer_config)
     print(f"Optimizer: {type(optimizer).__name__}")
 
@@ -523,6 +606,8 @@ def main():
     def metric_fn(predictions, targets):
         """Compute F1-macro as validation metric."""
         from src.evaluation.metrics import compute_f1_scores
+        # Use standard 0.5 threshold for BCE loss
+        # Note: Focal loss requires lower threshold (~0.2), but BCE works with 0.5
         scores = compute_f1_scores(predictions, targets, threshold=0.5, average='macro')
         return scores['f1_macro']
 

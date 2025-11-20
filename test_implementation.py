@@ -122,20 +122,13 @@ def create_dummy_dataset(data_dir: Path) -> None:
     from PIL import Image, ImageDraw, ImageFont
     import random
 
-    # Genre list
+    # Genre list (23 genres from actual MM-IMDb dataset)
     genres = [
-        "Action",
-        "Adventure",
-        "Animation",
-        "Comedy",
-        "Crime",
-        "Drama",
-        "Fantasy",
-        "Horror",
-        "Mystery",
-        "Romance",
-        "Sci-Fi",
-        "Thriller",
+        'Drama', 'Comedy', 'Romance', 'Thriller', 'Action',
+        'Horror', 'Documentary', 'Crime', 'Adventure', 'Sci-Fi',
+        'Mystery', 'Fantasy', 'Family', 'Biography', 'War',
+        'History', 'Music', 'Animation', 'Musical', 'Western',
+        'Sport', 'Film-Noir', 'Short'
     ]
 
     # Create dummy movies
@@ -338,7 +331,7 @@ def test_preprocessing(config: Dict) -> Dict:
 # ============================================================================
 
 
-def test_datasets(config: Dict, data_dir: Path) -> Dict:
+def test_datasets(config: Dict, data_dir: Path) -> Tuple[Dict, Dict, Dict]:
     """
     Test Dataset classes.
 
@@ -347,7 +340,7 @@ def test_datasets(config: Dict, data_dir: Path) -> Dict:
         data_dir (Path): Data directory
 
     Returns:
-        Dict: Test results
+        Tuple[Dict, Dict, Dict]: (test_results, vocab, genre_to_idx)
     """
     logger.info("\n" + "=" * 80)
     logger.info("STEP 3: Dataset Tests")
@@ -409,6 +402,8 @@ def test_datasets(config: Dict, data_dir: Path) -> Dict:
         results["text_dataset"] = "PASSED"
     except Exception as e:
         logger.error(f"   ❌ TextOnlyDataset failed: {e}")
+        import traceback
+        traceback.print_exc()
         results["text_dataset"] = "FAILED"
 
     # Test ImageOnlyDataset
@@ -431,6 +426,8 @@ def test_datasets(config: Dict, data_dir: Path) -> Dict:
         results["image_dataset"] = "PASSED"
     except Exception as e:
         logger.error(f"   ❌ ImageOnlyDataset failed: {e}")
+        import traceback
+        traceback.print_exc()
         results["image_dataset"] = "FAILED"
 
     # Test MultimodalDataset

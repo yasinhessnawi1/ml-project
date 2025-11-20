@@ -71,8 +71,9 @@ class AttentionLayer(nn.Module):
         attention_scores = attention_scores.squeeze(-1)
 
         # Apply mask if provided (set padding positions to -inf)
+        # Use -1e4 instead of -1e9 for float16 compatibility (mixed precision training)
         if mask is not None:
-            attention_scores = attention_scores.masked_fill(mask == 0, -1e9)
+            attention_scores = attention_scores.masked_fill(mask == 0, -1e4)
 
         # Compute attention weights (softmax over sequence dimension)
         attention_weights = F.softmax(attention_scores, dim=1)

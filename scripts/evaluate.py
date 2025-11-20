@@ -64,14 +64,6 @@ from src.utils.visualization import (
 )
 
 
-# MM-IMDb genre names
-GENRE_NAMES = [
-    'Action', 'Adventure', 'Animation', 'Biography', 'Comedy',
-    'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy',
-    'History', 'Horror', 'Music', 'Mystery', 'Romance',
-    'Sci-Fi', 'Sport', 'Thriller'
-]
-
 
 def parse_args():
     """Parse command line arguments."""
@@ -216,7 +208,7 @@ def main():
 
     # Load checkpoint
     print(f"\nLoading checkpoint from {args.checkpoint}...")
-    checkpoint = torch.load(args.checkpoint, map_location=device)
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
 
     # Infer model type from checkpoint path
     checkpoint_path = Path(args.checkpoint)
@@ -225,6 +217,20 @@ def main():
     print(f"Model type: {model_type}")
     print(f"Checkpoint epoch: {checkpoint.get('epoch', 'unknown')}")
     print(f"Best metric: {checkpoint.get('best_metric', 'unknown')}")
+
+    # Use optimal threshold if not specified by user
+    if args.threshold == 0.5:  # Default value, not user-specified
+        optimal_thresholds = {
+            'bert_text': 0.28,  # From threshold tuning (F1: 59.02%)
+            'lstm_text': 0.34,  # From threshold tuning (F1: 45.53%)
+        }
+        if model_type in optimal_thresholds:
+            args.threshold = optimal_thresholds[model_type]
+            print(f"Using optimal threshold for {model_type}: {args.threshold}")
+        else:
+            print(f"Using default threshold: {args.threshold}")
+    else:
+        print(f"Using user-specified threshold: {args.threshold}")
 
     # Create output directory
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -249,13 +255,23 @@ def main():
     vocab_or_tokenizer = None
     if is_text_only or is_multimodal:
         if 'bert' in model_type:
-            tokenizer = get_bert_tokenizer()
+            max_length = config['preprocessing']['text'].get('max_length_bert', 512)
+            tokenizer = get_bert_tokenizer(
+                model_name=config['model_distilbert'].get('model_name', 'distilbert-base-uncased'),
+                max_length=max_length
+            )
             vocab_or_tokenizer = tokenizer
             text_tokenizer_fn = tokenizer
         else:
-            # LSTM - use minimal tokenizer
+            # LSTM - load actual vocabulary from processed data
+            vocab_path = data_dir / 'vocab.json'
+            with open(vocab_path, 'r') as f:
+                vocab_data = json.load(f)
+            vocab = vocab_data.get('word_to_ix', vocab_data)
+            print(f"Loaded vocabulary with {len(vocab)} words for LSTM tokenizer")
+
             tokenizer = LSTMTokenizer(
-                vocab={'<PAD>': 0, '<UNK>': 1},
+                vocab=vocab,
                 max_length=config['preprocessing']['text']['max_length_lstm']
             )
             vocab_or_tokenizer = tokenizer
@@ -269,8 +285,11 @@ def main():
     else:
         transform = None
 
-    # Create genre mapping
-    genre_to_idx = {genre: i for i, genre in enumerate(GENRE_NAMES)}
+    # Load genre mapping from processed data
+    genre_mapping_path = data_dir / 'genre_mapping.json'
+    with open(genre_mapping_path, 'r') as f:
+        genre_to_idx = json.load(f)
+    print(f"Loaded {len(genre_to_idx)} genres from genre_mapping.json")
 
     # Create dataset
     print(f"\nCreating {args.split} dataset...")
@@ -287,14 +306,14 @@ def main():
         dataset = TextOnlyDataset(
             data_dir=data_dir,
             split=args.split,
-            tokenizer=text_tokenizer_fn,
+            text_tokenizer=text_tokenizer_fn,
             genre_to_idx=genre_to_idx
         )
     else:  # vision_only
         dataset = ImageOnlyDataset(
             data_dir=data_dir,
             split=args.split,
-            transform=transform,
+            image_transform=transform,
             genre_to_idx=genre_to_idx
         )
 
@@ -318,41 +337,48 @@ def main():
 
     # Create model based on type
     if model_type == 'lstm_text':
-        model_config = config['models']['text']
+        model_config = config['model_lstm']
         model_config['type'] = 'lstm_text'
         model_config['num_classes'] = num_classes
-        vocab_size = 10000  # Placeholder
+        # Get vocab size from checkpoint - infer from embedding weights if not stored
+        if 'vocab_size' in checkpoint:
+            vocab_size = checkpoint['vocab_size']
+        elif 'embedding.weight' in checkpoint['model_state_dict']:
+            vocab_size = checkpoint['model_state_dict']['embedding.weight'].shape[0]
+        else:
+            vocab_size = config['preprocessing']['text'].get('vocab_size', 70000)
+        print(f"LSTM vocab size: {vocab_size}")
         model = create_text_model(model_config, vocab_size=vocab_size)
 
     elif model_type == 'bert_text':
-        model_config = config['models']['text']
+        model_config = config['model_distilbert']
         model_config['type'] = 'distilbert_text'
         model_config['num_classes'] = num_classes
         model = create_text_model(model_config)
 
     elif model_type == 'resnet_vision':
-        model_config = config['models']['vision']
+        model_config = config['model_resnet']
         model_config['type'] = 'resnet'
         model_config['num_classes'] = num_classes
         model = create_vision_model(model_config)
 
     elif model_type == 'cnn_vision':
-        model_config = config['models']['vision']
+        model_config = config['model_custom_cnn']
         model_config['type'] = 'custom_cnn'
         model_config['num_classes'] = num_classes
         model = create_vision_model(model_config)
 
     elif model_type in ['early_fusion', 'late_fusion', 'attention_fusion']:
         # Create component models
-        text_config = config['models']['text']
+        text_config = config['model_distilbert']
         text_config['num_classes'] = num_classes
         text_model = create_text_model(text_config, vocab_size=10000)
 
-        vision_config = config['models']['vision']
+        vision_config = config['model_resnet']
         vision_config['num_classes'] = num_classes
         vision_model = create_vision_model(vision_config)
 
-        fusion_config = config['models']['fusion']
+        fusion_config = config['model_early_fusion']
 
         if model_type == 'early_fusion':
             model = EarlyFusionModel(
@@ -385,12 +411,15 @@ def main():
     print(f"\nPredictions shape: {predictions.shape}")
     print(f"Targets shape: {targets.shape}")
 
+    # Create class names list from genre_to_idx mapping
+    genre_names = [name for name, _ in sorted(genre_to_idx.items(), key=lambda x: x[1])]
+
     # Compute all metrics
     print("\nComputing comprehensive metrics...")
     metrics = compute_all_metrics(
         predictions,
         targets,
-        class_names=GENRE_NAMES,
+        class_names=genre_names,
         threshold=args.threshold,
         verbose=True
     )
@@ -402,7 +431,7 @@ def main():
     report = get_classification_report(
         predictions,
         targets,
-        class_names=GENRE_NAMES,
+        class_names=genre_names,
         threshold=args.threshold
     )
     print(report)
@@ -444,7 +473,7 @@ def main():
     print("\n1. Plotting confusion matrices...")
     plot_all_confusion_matrices(
         metrics['confusion_matrices'],
-        GENRE_NAMES,
+        genre_names,
         normalize=True,
         save_path=output_dir / 'confusion_matrices.png',
         show=False
@@ -455,7 +484,7 @@ def main():
     plot_roc_curves(
         predictions,
         targets,
-        GENRE_NAMES,
+        genre_names,
         save_path=output_dir / 'roc_curves.png',
         show=False
     )
@@ -465,7 +494,7 @@ def main():
     plot_precision_recall_curves(
         predictions,
         targets,
-        GENRE_NAMES,
+        genre_names,
         save_path=output_dir / 'pr_curves.png',
         show=False
     )
@@ -485,7 +514,7 @@ def main():
         plot_prediction_comparison(
             predictions,
             targets,
-            GENRE_NAMES,
+            genre_names,
             sample_idx=i,
             threshold=args.threshold,
             save_path=output_dir / f'prediction_sample_{i}.png',

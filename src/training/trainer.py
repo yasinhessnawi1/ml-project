@@ -25,7 +25,7 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 
 import numpy as np
 from pathlib import Path
@@ -220,15 +220,17 @@ class Trainer:
             verbose=early_stop_config.get('verbose', True)
         ) if early_stop_config.get('enabled', True) else None
 
-        # Mixed precision training
-        self.use_amp = config.get('use_amp', False) and torch.cuda.is_available()
-        self.scaler = GradScaler() if self.use_amp else None
+        # Mixed precision training (support both 'use_amp' and 'mixed_precision' keys)
+        mixed_precision_enabled = config.get('use_amp', config.get('mixed_precision', False))
+        self.use_amp = mixed_precision_enabled and torch.cuda.is_available()
+        self.scaler = GradScaler('cuda') if self.use_amp else None
 
-        # Gradient accumulation
-        self.grad_accumulation_steps = config.get('grad_accumulation_steps', 1)
+        # Gradient accumulation (support both naming conventions)
+        self.grad_accumulation_steps = config.get('grad_accumulation_steps',
+                                                   config.get('gradient_accumulation_steps', 1))
 
-        # Gradient clipping
-        self.max_grad_norm = config.get('max_grad_norm', None)
+        # Gradient clipping (support both 'max_grad_norm' and 'gradient_clip' keys)
+        self.max_grad_norm = config.get('max_grad_norm', config.get('gradient_clip', None))
 
         # TensorBoard logging
         self.use_tensorboard = config.get('use_tensorboard', True)
@@ -288,7 +290,7 @@ class Trainer:
 
             # Forward pass with mixed precision
             if self.use_amp:
-                with autocast():
+                with autocast('cuda'):
                     outputs = self._forward_pass(batch)
                     loss = self.loss_fn(outputs, batch['labels'])
                     loss = loss / self.grad_accumulation_steps
@@ -756,7 +758,7 @@ def create_scheduler(
             step_size=scheduler_config.get('step_size', 10),
             gamma=scheduler_config.get('gamma', 0.1)
         )
-    elif scheduler_type == 'plateau' or scheduler_type == 'reducelronplateau':
+    elif scheduler_type in ['plateau', 'reducelronplateau', 'reduce_on_plateau']:
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             mode=scheduler_config.get('mode', 'max'),

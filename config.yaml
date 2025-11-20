@@ -52,7 +52,7 @@ dataset:
 preprocessing:
   # Text preprocessing
   text:
-    max_length_lstm: 256  # Based on 95th percentile (update after EDA)
+    max_length_lstm: 128  # Reduced to match median (107) + padding
     max_length_bert: 512  # DistilBERT max sequence length
     vocab_size: 10000  # For LSTM tokenizer
     min_text_length: 10  # Minimum words in plot summary
@@ -162,10 +162,10 @@ training:
   # Optimization
   optimizer: "adamw"  # adamw / adam / sgd
   learning_rate:
-    from_scratch: 0.001  # For models trained from scratch (LSTM, Custom CNN)
+    from_scratch: 0.0003  # Reduced from 0.001 - slower learning for better generalization
     fine_tune: 0.0001  # For fine-tuning pretrained models
     bert_fine_tune: 0.00002  # Lower LR for BERT fine-tuning (2e-5)
-  weight_decay: 0.01
+  weight_decay: 0.02  # Increased L2 regularization
   betas: [0.9, 0.999]  # Adam beta parameters
   eps: 0.00000001  # Adam epsilon (1e-8)
 
@@ -180,7 +180,7 @@ training:
   scheduler:
     type: "reduce_on_plateau"  # reduce_on_plateau / cosine_annealing / one_cycle
     factor: 0.5  # ReduceLROnPlateau: multiply LR by this on plateau
-    patience: 5  # ReduceLROnPlateau: epochs to wait
+    patience: 7  # ReduceLROnPlateau: epochs to wait (increased to give more time)
     min_lr: 0.000001  # Minimum learning rate (1e-6)
 
     # For CosineAnnealing
@@ -190,7 +190,7 @@ training:
   # Regularization
   early_stopping:
     enabled: true
-    patience: 10  # Stop if no improvement for N epochs
+    patience: 10  # Increased back to 10 - give model more time with lower LR
     metric: "f1_macro"  # Metric to monitor
     mode: "max"  # max for f1, min for loss
 
@@ -198,11 +198,11 @@ training:
   checkpoint:
     save_best: true
     save_every_n_epochs: 5  # Save periodic checkpoints
-    keep_last_n: 3  # Keep last N checkpoints
+    keep_last_n: 1  # Keep last N checkpoints
 
 # Loss Function Configuration
 loss:
-  type: "bce"  # bce / focal / weighted_bce
+  type: "weighted_bce"  # bce / focal / weighted_bce  [Use weighted BCE for BERT with class imbalance]
 
   # Focal Loss parameters (if type=focal)
   focal:
@@ -212,7 +212,7 @@ loss:
   # Weighted BCE (if type=weighted_bce)
   weighted_bce:
     compute_weights: true  # Auto-compute from training data
-    pos_weights: null  # Or provide manual weights [w1, w2, ..., w18]
+    pos_weights: null  # Or provide manual weights [w1, w2, ..., w23]
 
 # Evaluation Metrics
 evaluation:
