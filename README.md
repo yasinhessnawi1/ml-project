@@ -33,7 +33,7 @@ This project explores various deep learning architectures for multimodal genre c
 - **Text Models**: LSTM with Attention, DistilBERT
 - **Vision Models**: ResNet-18/50, Custom CNN
 - **Fusion Strategies**: Early Fusion, Late Fusion, Attention-Based Fusion
-- **Task**: Multi-label classification (18 genres)
+- **Task**: Multi-label classification (23 genres)
 - **Dataset**: MM-IMDb (Movie Posters + Plot Summaries)
 
 The project follows academic research standards with comprehensive documentation, experiments tracking, and reproducible results.
@@ -385,7 +385,7 @@ preprocessing:
 
 ```bash
 # LSTM with Attention
-python scripts/train.py --model lstm --epochs 50
+python scripts/train.py --model lstm_text --num-epochs 50
 
 # DistilBERT
 python scripts/train.py --model distilbert --epochs 20
