@@ -36,22 +36,17 @@ This project explores various deep learning architectures for multimodal genre c
 - **Task**: Multi-label classification (23 genres)
 - **Dataset**: MM-IMDb (Movie Posters + Plot Summaries)
 
-The project follows academic research standards with comprehensive documentation, experiments tracking, and reproducible results.
-
 ---
 
 ## ✨ Features
 
 - ✅ **Multiple Model Architectures**: Text-only, Vision-only, and Multimodal fusion models
 - ✅ **Flexible Configuration**: YAML-based configuration management
-- ✅ **Comprehensive Preprocessing**: Automated text cleaning, tokenization, image augmentation
+- ✅ **Preprocessing**: Automated text cleaning, tokenization, image augmentation
 - ✅ **Training Infrastructure**: Modular trainer with checkpointing, early stopping, and logging
 - ✅ **Evaluation Metrics**: F1-score (macro/micro/weighted), precision, recall, AUC-ROC
 - ✅ **Experiment Tracking**: TensorBoard integration, detailed logging
 - ✅ **Reproducibility**: Seed setting, deterministic training
-- ✅ **Well-Documented**: Full docstrings, type hints, inline comments
-- ✅ **Testing**: Comprehensive test suite
-
 ---
 
 ## 📁 Project Structure
@@ -107,7 +102,6 @@ ml-project/
 ├── config.yaml                     # Main configuration file
 ├── requirements.txt                # Python dependencies
 ├── setup.py                        # Package installation
-├── test_implementation.py          # Comprehensive test script
 └── README.md                       # This file
 ```
 
@@ -306,7 +300,7 @@ This will download and extract the MM-IMDb dataset (~3.7 GB download, ~15.6 GB e
 
 ### 2. Verify Installation
 
-Run the comprehensive test script:
+Run the test script:
 
 ```bash
 python test_implementation.py --download-data
@@ -330,7 +324,7 @@ ML PROJECT IMPLEMENTATION TEST
 📊 Results: 15/15 tests passed (0 failed)
 ```
 
-### 3. Train Your First Model
+### 3. Train Model
 
 ```bash
 # Train text-only LSTM model
@@ -474,7 +468,7 @@ jupyter notebook notebooks/01_data_exploration.ipynb
 ## 📚 Documentation
 
 Comprehensive documentation is available in the [`.docs/`](.docs/) directory:
-
+(to be uploaded ...)
 - **[Implementation Plan](.docs/plan.md)**: Complete 8-week implementation roadmap
 - **[Dataset Analysis](.docs/01_dataset_analysis.md)**: Dataset statistics and EDA
 - **[Architecture Decisions](.docs/02_architecture_decisions.md)**: Model design rationale
@@ -612,7 +606,7 @@ If you use this code in your research, please cite:
 
 ```bibtex
 @misc{ml-project-2025,
-  author = {Yasin Hessnawi},
+  author = {Yasin Hessnawi, Anwar Debes},
   title = {Multimodal Genre Classification with Deep Learning},
   year = {2025},
   publisher = {GitHub},
@@ -640,8 +634,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📧 Contact
 
 **Yasin Hessnawi**
-- GitHub: [@yasinhessnawi](https://github.com/yasinhessnawi)
-- Email: yasin.hessnawi@example.com
+- GitHub: [@yasinhessnawi1](https://github.com/yasinhessnawi1)
+- Email: yasinhessnawi@gmail.com
 
 ---
 
@@ -661,4 +655,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Last Updated**: January 2025
+**Last Updated**: November 2025
