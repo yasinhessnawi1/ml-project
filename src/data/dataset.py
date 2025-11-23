@@ -243,7 +243,7 @@ class MultimodalDataset(Dataset):
                 text = "No summary available."
 
         # Tokenize text
-        text_tensor = self.text_tokenizer(text)
+        text_output = self.text_tokenizer(text)
 
         # Load image
         image = load_image(sample["image_path"])
@@ -263,12 +263,24 @@ class MultimodalDataset(Dataset):
             sample["genres"], self.genre_to_idx, self.num_genres
         )
 
-        return {
-            "text": text_tensor,
-            "image": image_tensor,
-            "labels": labels,
-            "movie_id": sample["id"],
-        }
+        # Handle different tokenizer outputs
+        # BERT tokenizers return dict with 'input_ids' and 'attention_mask'
+        # LSTM tokenizers return a tensor directly
+        if isinstance(text_output, dict):
+            return {
+                "text": text_output['input_ids'],
+                "attention_mask": text_output['attention_mask'],
+                "image": image_tensor,
+                "labels": labels,
+                "movie_id": sample["id"],
+            }
+        else:
+            return {
+                "text": text_output,
+                "image": image_tensor,
+                "labels": labels,
+                "movie_id": sample["id"],
+            }
 
     def get_statistics(self) -> Dict[str, int]:
         """

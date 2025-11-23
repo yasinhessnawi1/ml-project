@@ -153,6 +153,10 @@ class EarlyFusionModel(nn.Module):
         # Extract text features
         if isinstance(self.text_model, DistilBERTTextModel):
             # For BERT, get [CLS] embedding before final classifier
+            # Ensure attention_mask is provided to avoid transformer warnings
+            if text_attention_mask is None:
+                # Create attention mask (1 for non-padding, 0 for padding)
+                text_attention_mask = (text_input != 0).long()
             outputs = self.text_model.bert(
                 input_ids=text_input, attention_mask=text_attention_mask
             )

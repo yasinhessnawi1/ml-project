@@ -172,7 +172,17 @@ def prepare_data(config, model_type, device):
     # Prepare text preprocessing
     vocab_or_tokenizer = None
     if is_text_only or is_multimodal:
-        if 'bert' in model_type:
+        # Determine which text model is being used
+        if is_multimodal:
+            # For fusion models, get the text model type from fusion config
+            fusion_config = config.get(f'model_{model_type}', {})
+            text_model_type = fusion_config.get('text_model', 'distilbert')
+            use_bert = 'bert' in text_model_type or 'distilbert' in text_model_type
+        else:
+            # For text-only models, check the model type
+            use_bert = 'bert' in model_type
+
+        if use_bert:
             # BERT tokenizer
             print("Loading BERT tokenizer...")
             max_length = config['preprocessing']['text'].get('max_length_bert', 512)
@@ -448,35 +458,61 @@ def create_model(config, model_type, vocab_or_tokenizer, device):
         vision_config['num_classes'] = num_classes
         vision_model = create_vision_model(vision_config)
 
+        # Determine output dimensions for projection layers
+        # Text model output dimensions
+        if 'bert' in text_model_type or 'distilbert' in text_model_type:
+            text_output_dim = 768  # DistilBERT hidden size
+        else:  # LSTM
+            lstm_hidden = text_config.get('hidden_dim', 256)
+            bidirectional = text_config.get('bidirectional', True)
+            text_output_dim = lstm_hidden * 2 if bidirectional else lstm_hidden
+
+        # Vision model output dimensions
+        if 'custom' in vision_model_type or 'cnn' in vision_model_type:
+            # Custom CNN uses last channel size (512 by default)
+            channels = vision_config.get('channels', [64, 128, 256, 512])
+            vision_output_dim = channels[-1]
+        else:  # ResNet
+            architecture = vision_config.get('architecture', 'resnet18')
+            if architecture == 'resnet18':
+                vision_output_dim = 512
+            else:  # resnet50
+                vision_output_dim = 2048
+
+        print(f"Text output dim: {text_output_dim}, Vision output dim: {vision_output_dim}")
+
         if model_type == 'early_fusion':
             model = EarlyFusionModel(
                 text_model=text_model,
                 vision_model=vision_model,
+                text_output_dim=text_output_dim,
+                vision_output_dim=vision_output_dim,
                 num_classes=num_classes,
                 text_projection_dim=fusion_config.get('text_projection_dim', 512),
                 vision_projection_dim=fusion_config.get('vision_projection_dim', 512),
                 fusion_hidden_dims=fusion_config.get('fusion_hidden_dims', [1024, 512, 256]),
-                dropout=fusion_config.get('dropout', 0.3)
+                dropout=fusion_config.get('dropout', [0.5, 0.3])
             )
 
         elif model_type == 'late_fusion':
             model = LateFusionModel(
                 text_model=text_model,
                 vision_model=vision_model,
-                num_classes=num_classes,
-                fusion_strategy=fusion_config.get('fusion_strategy', 'average')
+                fusion_strategy=fusion_config.get('fusion_strategy', 'average'),
+                initial_alpha=fusion_config.get('alpha', 0.5)
             )
 
         else:  # attention_fusion
             model = AttentionFusionModel(
                 text_model=text_model,
                 vision_model=vision_model,
+                text_dim=text_output_dim,
+                vision_dim=vision_output_dim,
+                num_heads=fusion_config.get('num_heads', 8),
+                attention_dropout=fusion_config.get('attention_dropout', 0.1),
+                fusion_hidden_dim=fusion_config.get('fusion_hidden_dim', 512),
                 num_classes=num_classes,
-                text_projection_dim=fusion_config.get('text_projection_dim', 512),
-                vision_projection_dim=fusion_config.get('vision_projection_dim', 512),
-                fusion_hidden_dims=fusion_config.get('fusion_hidden_dims', [1024, 512, 256]),
-                num_attention_heads=fusion_config.get('num_heads', 8),
-                dropout=fusion_config.get('dropout', 0.3)
+                dropout=fusion_config.get('dropout', 0.3) if isinstance(fusion_config.get('dropout', 0.3), float) else fusion_config.get('dropout', [0.3])[0]
             )
 
     else:
@@ -581,8 +617,12 @@ def main():
         print(f"Using BERT fine-tuning LR: {lr}")
     elif 'resnet' in args.model.lower():
         # Use fine-tuning LR for pretrained ResNet models
-        lr = optimizer_config['learning_rate'].get('fine_tune', 0.0001)
+        lr = optimizer_config['learning_rate'].get('fine_tune', 0.00003)
         print(f"Using fine-tuning LR: {lr}")
+    elif 'fusion' in args.model.lower():
+        # Fusion models use BERT + ResNet, need BERT-level LR (lowest common denominator)
+        lr = optimizer_config['learning_rate'].get('bert_fine_tune', 0.00002)
+        print(f"Using fusion LR (BERT fine-tune): {lr}")
     else:
         # Use from-scratch LR for LSTM, custom CNN, and other models
         lr = optimizer_config['learning_rate'].get('from_scratch', 0.0003)

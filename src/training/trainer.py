@@ -523,10 +523,11 @@ class Trainer:
         if 'text' in batch and 'image' in batch:
             # Multimodal model
             if 'attention_mask' in batch:
-                # BERT-based text model
+                # BERT-based text model - pass attention mask as separate argument
                 outputs = self.model(
-                    text_input={'input_ids': batch['text'], 'attention_mask': batch['attention_mask']},
-                    image_input=batch['image']
+                    text_input=batch['text'],
+                    image_input=batch['image'],
+                    text_attention_mask=batch['attention_mask']
                 )
             else:
                 # LSTM-based text model

@@ -18,10 +18,11 @@ from torch.utils.data import DataLoader
 # Add project root to path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.data.dataset import TextOnlyDataset
-from src.data.preprocessing import get_bert_tokenizer
+from src.data.dataset import TextOnlyDataset, ImageOnlyDataset
+from src.data.preprocessing import get_bert_tokenizer, get_image_transforms
 from src.evaluation.metrics import compute_f1_scores
 from src.models.text_models import DistilBERTTextModel
+from src.models.vision_models import ResNetVisionModel, CustomCNNModel
 from src.utils.config import load_config
 
 
@@ -45,73 +46,124 @@ def load_model_and_data(checkpoint_path, config_path, device):
     # Load checkpoint first to get model info
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
 
-    # Load appropriate tokenizer and create model based on type
-    if 'bert' in model_type:
-        # BERT model
-        max_length = config['preprocessing']['text'].get('max_length_bert', 512)
-        tokenizer = get_bert_tokenizer(
-            model_name=config['model_distilbert'].get('model_name', 'distilbert-base-uncased'),
-            max_length=max_length
+    # Determine if this is a vision model or text model
+    is_vision_model = 'resnet' in model_type or 'cnn' in model_type
+
+    if is_vision_model:
+        # ===== VISION MODELS =====
+        print("Loading vision model...")
+
+        # Get image transforms (validation - no augmentation)
+        transform = get_image_transforms(
+            split='val',
+            image_size=config['preprocessing']['image']['target_size']
         )
 
-        model = DistilBERTTextModel(
-            num_classes=num_genres,
-            model_name=config['model_distilbert'].get('model_name', 'distilbert-base-uncased'),
-            classifier_hidden_dim=config['model_distilbert'].get('classifier_hidden_dim', 256),
-            dropout=config['model_distilbert'].get('dropout', 0.3),
-            fine_tune_all=config['model_distilbert'].get('fine_tune_all', True)
-        )
-    else:
-        # LSTM model
-        from src.data.preprocessing import LSTMTokenizer
-        from src.models.text_models import LSTMTextModel
-
-        # Get vocab size from checkpoint - infer from embedding weights if not stored
-        if 'vocab_size' in checkpoint:
-            vocab_size = checkpoint['vocab_size']
-        elif 'embedding.weight' in checkpoint['model_state_dict']:
-            vocab_size = checkpoint['model_state_dict']['embedding.weight'].shape[0]
+        # Create appropriate vision model
+        if 'resnet' in model_type:
+            print("Creating ResNet vision model...")
+            model_config = config['model_resnet']
+            model = ResNetVisionModel(
+                num_classes=num_genres,
+                architecture=model_config.get('architecture', 'resnet18'),
+                pretrained=model_config.get('pretrained', True),
+                fine_tune_strategy=model_config.get('fine_tune_strategy', 'unfreeze_layer3_layer4'),
+                classifier_hidden_dim=model_config.get('classifier_hidden_dim', 256),
+                dropout=model_config.get('dropout', 0.5)
+            )
+        elif 'cnn' in model_type:
+            print("Creating Custom CNN vision model...")
+            model_config = config['model_custom_cnn']
+            model = CustomCNNModel(
+                num_classes=num_genres,
+                channels=model_config.get('channels', [64, 128, 256, 512]),
+                kernel_sizes=model_config.get('kernel_sizes', [7, 3, 3, 3]),
+                dropout=model_config.get('dropout', 0.5)
+            )
         else:
-            vocab_size = config['preprocessing']['text'].get('vocab_size', 70000)
-        print(f"LSTM vocab size: {vocab_size}")
+            raise ValueError(f"Unknown vision model type: {model_type}")
 
-        # Load actual vocabulary from processed data
-        vocab_path = data_dir / 'vocab.json'
-        print(f"Loading vocabulary from: {vocab_path}")
-        with open(vocab_path, 'r') as f:
-            vocab_data = json.load(f)
-
-        # Extract word_to_ix mapping (the actual vocabulary)
-        vocab = vocab_data.get('word_to_ix', vocab_data)
-        print(f"Loaded vocabulary with {len(vocab)} words")
-
-        max_length = config['preprocessing']['text'].get('max_length_lstm', 128)
-        tokenizer = LSTMTokenizer(
-            vocab=vocab,
-            max_length=max_length
+        # Create validation dataset (vision only)
+        val_dataset = ImageOnlyDataset(
+            data_dir=data_dir,
+            split='val',
+            image_transform=transform,
+            genre_to_idx=genre_to_idx
         )
 
-        # Create LSTM model
-        model_config = config['model_lstm']
-        model = LSTMTextModel(
-            vocab_size=vocab_size,
-            embedding_dim=model_config.get('embedding_dim', 300),
-            hidden_dim=model_config.get('hidden_dim', 256),
-            num_layers=model_config.get('num_layers', 2),
-            num_classes=num_genres,
-            dropout=model_config.get('dropout', 0.3),
-            bidirectional=model_config.get('bidirectional', True),
-            use_attention=model_config.get('attention', True)
+    else:
+        # ===== TEXT MODELS =====
+        print("Loading text model...")
+
+        if 'bert' in model_type:
+            # BERT model
+            print("Creating BERT text model...")
+            max_length = config['preprocessing']['text'].get('max_length_bert', 512)
+            tokenizer = get_bert_tokenizer(
+                model_name=config['model_distilbert'].get('model_name', 'distilbert-base-uncased'),
+                max_length=max_length
+            )
+
+            model = DistilBERTTextModel(
+                num_classes=num_genres,
+                model_name=config['model_distilbert'].get('model_name', 'distilbert-base-uncased'),
+                classifier_hidden_dim=config['model_distilbert'].get('classifier_hidden_dim', 256),
+                dropout=config['model_distilbert'].get('dropout', 0.3),
+                fine_tune_all=config['model_distilbert'].get('fine_tune_all', True)
+            )
+        else:
+            # LSTM model
+            print("Creating LSTM text model...")
+            from src.data.preprocessing import LSTMTokenizer
+            from src.models.text_models import LSTMTextModel
+
+            # Get vocab size from checkpoint - infer from embedding weights if not stored
+            if 'vocab_size' in checkpoint:
+                vocab_size = checkpoint['vocab_size']
+            elif 'embedding.weight' in checkpoint['model_state_dict']:
+                vocab_size = checkpoint['model_state_dict']['embedding.weight'].shape[0]
+            else:
+                vocab_size = config['preprocessing']['text'].get('vocab_size', 70000)
+            print(f"LSTM vocab size: {vocab_size}")
+
+            # Load actual vocabulary from processed data
+            vocab_path = data_dir / 'vocab.json'
+            print(f"Loading vocabulary from: {vocab_path}")
+            with open(vocab_path, 'r') as f:
+                vocab_data = json.load(f)
+
+            # Extract word_to_ix mapping (the actual vocabulary)
+            vocab = vocab_data.get('word_to_ix', vocab_data)
+            print(f"Loaded vocabulary with {len(vocab)} words")
+
+            max_length = config['preprocessing']['text'].get('max_length_lstm', 128)
+            tokenizer = LSTMTokenizer(
+                vocab=vocab,
+                max_length=max_length
+            )
+
+            # Create LSTM model
+            model_config = config['model_lstm']
+            model = LSTMTextModel(
+                vocab_size=vocab_size,
+                embedding_dim=model_config.get('embedding_dim', 300),
+                hidden_dim=model_config.get('hidden_dim', 256),
+                num_layers=model_config.get('num_layers', 2),
+                num_classes=num_genres,
+                dropout=model_config.get('dropout', 0.3),
+                bidirectional=model_config.get('bidirectional', True),
+                use_attention=model_config.get('attention', True)
+            )
+
+        # Create validation dataset (text only)
+        val_dataset = TextOnlyDataset(
+            data_dir=data_dir,
+            split='val',
+            text_tokenizer=tokenizer,
+            genre_to_idx=genre_to_idx
         )
 
-    # Create validation dataset
-    val_dataset = TextOnlyDataset(
-        data_dir=data_dir,
-        split='val',
-        text_tokenizer=tokenizer,
-        genre_to_idx=genre_to_idx
-    )
-
+    # Create dataloader (same for both vision and text)
     val_loader = DataLoader(
         val_dataset,
         batch_size=32,
@@ -129,25 +181,38 @@ def load_model_and_data(checkpoint_path, config_path, device):
 
 @torch.no_grad()
 def get_predictions(model, data_loader, device):
-    """Get model predictions and ground truth labels."""
+    """Get model predictions and ground truth labels.
+
+    Works for both text and vision models.
+    """
     all_predictions = []
     all_targets = []
 
     for batch in data_loader:
-        # Move to device
-        text = batch['text'].to(device)
-        attention_mask = batch.get('attention_mask')
-        if attention_mask is not None:
-            attention_mask = attention_mask.to(device)
         labels = batch['labels'].to(device)
 
-        # Forward pass
-        if attention_mask is not None:
-            outputs = model(text, attention_mask)
-        else:
-            outputs = model(text)
+        # Check if this is a text model or vision model
+        if 'text' in batch:
+            # Text model
+            text = batch['text'].to(device)
+            attention_mask = batch.get('attention_mask')
 
-        # Apply sigmoid
+            # Forward pass
+            if attention_mask is not None:
+                attention_mask = attention_mask.to(device)
+                outputs = model(text, attention_mask)
+            else:
+                outputs = model(text)
+
+        elif 'image' in batch:
+            # Vision model
+            images = batch['image'].to(device)
+            outputs = model(images)
+
+        else:
+            raise ValueError("Batch must contain either 'text' or 'image' key")
+
+        # Apply sigmoid to get probabilities
         predictions = torch.sigmoid(outputs)
 
         all_predictions.append(predictions.cpu())
