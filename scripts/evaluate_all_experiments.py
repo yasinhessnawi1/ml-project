@@ -601,7 +601,6 @@ def main():
     print(f"  - Individual evaluations: evaluation_final/<model_type>/{args.split}_*/")
     print("\nNext steps:")
     print("  1. Review the summary report and CSV data")
-    print("  2. Manually update .docs/ files for thesis documentation")
     print("  3. Include visualizations from individual evaluation directories")
     print("="*80 + "\n")
 

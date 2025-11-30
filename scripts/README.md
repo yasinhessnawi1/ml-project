@@ -235,4 +235,3 @@ After running the scripts:
 2. Compare metrics across different models
 3. Analyze per-class performance in evaluation results
 4. Experiment with hyperparameters in `config.yaml`
-5. Document findings in `.docs/` for report writing

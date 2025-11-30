@@ -31,7 +31,6 @@ setup(
     url="https://github.com/yasinhessnawi/ml-project",
     project_urls={
         "Bug Tracker": "https://github.com/yasinhessnawi/ml-project/issues",
-        "Documentation": "https://github.com/yasinhessnawi/ml-project/tree/main/.docs",
     },
     packages=find_packages(exclude=["tests", "notebooks", "scripts"]),
     classifiers=[
