@@ -57,9 +57,7 @@ ml-project/
 │   ├── raw/                        # Original MM-IMDb dataset
 │   ├── processed/                  # Preprocessed data
 │   └── splits/                     # Train/val/test splits
-├── models/                         # Saved models
-│   ├── checkpoints/                # Training checkpoints
-│   └── final/                      # Final trained models
+├── checkpoints/                         # Saved models
 ├── src/                            # Source code
 │   ├── data/                       # Data processing
 │   │   ├── dataset.py             # PyTorch Dataset classes
@@ -80,14 +78,11 @@ ml-project/
 ├── scripts/                        # Utility scripts
 │   ├── download_data.sh           # Automated data download
 │   ├── preprocess_data.py         # Data preprocessing
-│   └── train.py                   # Training script
+│   ├── train.py                   # Training script
+|   ├──...
 ├── experiments/                    # Experiment configurations
 │   └── configs/
 ├── results/                        # Results and outputs
-│   ├── figures/                   # Plots and visualizations
-│   └── tables/                    # Results tables
-├── tests/                          # Unit tests
-├── report/                         # LaTeX report
 ├── config.yaml                     # Main configuration file
 ├── requirements.txt                # Python dependencies
 ├── setup.py                        # Package installation
@@ -450,7 +445,7 @@ trainer.train(train_loader, val_loader)
 
 ### API Documentation
 
-All modules have comprehensive docstrings:
+All modules have docstrings:
 
 ```python
 from src.models.text_models import LSTMTextModel
@@ -466,13 +461,11 @@ Results will be saved to the `results/` directory:
 
 ```
 results/
-├── figures/
-│   ├── training_curves.png
-│   ├── confusion_matrix.png
-│   └── attention_visualization.png
-└── tables/
-    ├── model_comparison.csv
-    └── per_genre_f1.csv
+├── training_curves.png
+├── confusion_matrix.png
+└── attention_visualization.png
+├── model_comparison.csv
+└── per_genre_f1.csv
 ```
 
 ### Expected Performance (on MM-IMDb)
@@ -491,19 +484,6 @@ results/
 ---
 
 ## 🧪 Testing
-
-Run the test suite:
-
-```bash
-# Run all tests
-pytest tests/
-
-# Run specific test file
-pytest tests/test_preprocessing.py
-
-# With coverage
-pytest --cov=src tests/
-```
 
 Run implementation tests:
 
@@ -554,7 +534,7 @@ training:
 
 ## 📊 Results
 
-**Project Status**: ✅ **COMPLETE** - All experiments finished (November 27, 2025)
+**Project Status**: ✅ **COMPLETE** - All experiments finished (November 15, 2025)
 
 ### Final Model Performance (Test Set)
 
@@ -646,7 +626,7 @@ python scripts/evaluate.py --checkpoint checkpoints/attention_fusion/best.pth --
 
 ### Research Contributions
 
-1. **Comprehensive Fusion Comparison**: First systematic comparison of Early, Late, and Attention fusion on MM-IMDb with modern pretrained models (BERT, ResNet)
+1. **Fusion Comparison**: First systematic comparison of Early, Late, and Attention fusion on MM-IMDb with modern pretrained models (BERT, ResNet)
 
 2. **Modality Imbalance Analysis**: Demonstrated that fusion improves performance even when one modality dominates (text 1.92x better than vision)
 
@@ -656,28 +636,9 @@ python scripts/evaluate.py --checkpoint checkpoints/attention_fusion/best.pth --
 
 ---
 
-## 🤝 Contributing
-
-Contributions are welcome! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Code Style
-
-- Follow PEP 8 guidelines
-- Add docstrings to all functions/classes
-- Include type hints
-- Write unit tests for new features
-
----
-
 ## 📝 Citation
 
-If you use this code in your research, please cite:
+If you want to use this code in your research, and wants to cite (no need):
 
 ```bibtex
 @misc{ml-project-2025,
@@ -693,7 +654,7 @@ If you use this code in your research, please cite:
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is not a big deal but its licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
@@ -712,11 +673,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - GitHub: [@yasinhessnawi1](https://github.com/yasinhessnawi1)
 - Email: yasinhessnawi@gmail.com
 
+**Anwar Debes**
+- Github: [@AnwarDebes](https://github.com/AnwarDebes)
+
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap followed
 
-- [x] Project structure and documentation
+- [x] Project structure
 - [x] Data preprocessing pipeline
 - [x] Text models (LSTM, DistilBERT)
 - [x] Vision models (ResNet, Custom CNN)
@@ -727,9 +691,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] Results analysis and visualization
 - [x] All experiments completed
 - [x] Documentation for thesis writing
-- [ ] Final thesis report writing (in progress)
+- [x] Final thesis report writing
 
----
-
-**Last Updated**: November 27, 2025
-**Project Status**: ✅ **COMPLETE** - All experiments finished, ready for thesis writing
