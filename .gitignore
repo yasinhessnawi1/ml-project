@@ -65,7 +65,6 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
-.docs
 nosetests.xml
 coverage.xml
 *.cover
@@ -169,3 +168,28 @@ report/*.dvi
 *.swp
 *.swo
 *~
+nul
+
+# === Project-Specific Additions ===
+
+# Checkpoints (large model files)
+checkpoints/
+checkpoints_server/
+
+# Evaluation results (can be regenerated)
+evaluation_final/
+Evaluation/
+results_server/
+results/
+
+
+# Threshold tuning outputs
+threshold_tuning_*.json
+
+# Test/debug images
+augmentation_test.png
+threshold_curve.png
+
+# Any other large result directories
+experiments/results/
+

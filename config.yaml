@@ -73,12 +73,12 @@ preprocessing:
   augmentation:
     enabled: true
     horizontal_flip_prob: 0.5
-    rotation_degrees: 10
+    rotation_degrees: 5  # Reduced from 10 - posters should stay upright
     color_jitter:
-      brightness: 0.2
-      contrast: 0.2
-      saturation: 0.2
-      hue: 0.1
+      brightness: 0.15  # Reduced from 0.2 - less aggressive
+      contrast: 0.15    # Reduced from 0.2
+      saturation: 0.15  # Reduced from 0.2
+      hue: 0.05        # Reduced from 0.1
 
   # Labels
   labels:
@@ -113,14 +113,14 @@ model_resnet:
   pretrained: true
   fine_tune_strategy: "unfreeze_layer3_layer4"  # all / last_layer / unfreeze_layer3_layer4
   classifier_hidden_dim: 256
-  dropout: 0.5
+  dropout: 0.3  # Increased from 0.5 for better regularization
 
 # Custom CNN Vision Model
 model_custom_cnn:
   type: "custom_cnn"
   channels: [64, 128, 256, 512]  # Channel progression
   kernel_sizes: [7, 3, 3, 3]
-  dropout: 0.5
+  dropout: 0.7  # Increased from 0.5 for better regularization
 
 # Early Fusion Model
 model_early_fusion:
@@ -130,7 +130,7 @@ model_early_fusion:
   text_projection_dim: 512
   vision_projection_dim: 512
   fusion_hidden_dims: [1024, 512, 256]
-  dropout: [0.5, 0.3]  # Dropout for each fusion layer
+  dropout: [0.3, 0.3]  # Dropout for each fusion layer
   activation: "relu"  # relu / gelu / mish
 
 # Late Fusion Model
@@ -163,9 +163,9 @@ training:
   optimizer: "adamw"  # adamw / adam / sgd
   learning_rate:
     from_scratch: 0.0003  # Reduced from 0.001 - slower learning for better generalization
-    fine_tune: 0.0001  # For fine-tuning pretrained models
-    bert_fine_tune: 0.00002  # Lower LR for BERT fine-tuning (2e-5)
-  weight_decay: 0.02  # Increased L2 regularization
+    fine_tune: 0.00003  # For fine-tuning pretrained vision models (3e-5, lower like BERT)
+    bert_fine_tune: 0.00003  # Lower LR for BERT fine-tuning (2e-5)
+  weight_decay: 0.05  # Increased L2 regularization for vision models
   betas: [0.9, 0.999]  # Adam beta parameters
   eps: 0.00000001  # Adam epsilon (1e-8)
 
@@ -190,7 +190,7 @@ training:
   # Regularization
   early_stopping:
     enabled: true
-    patience: 10  # Increased back to 10 - give model more time with lower LR
+    patience: 20  # Increased back to 10 - give model more time with lower LR
     metric: "f1_macro"  # Metric to monitor
     mode: "max"  # max for f1, min for loss
 

@@ -53,14 +53,6 @@ This project explores various deep learning architectures for multimodal genre c
 
 ```
 ml-project/
-├── .docs/                          # Implementation documentation
-│   ├── plan.md                     # Complete implementation plan
-│   ├── 01_dataset_analysis.md     # Dataset analysis
-│   ├── 02_architecture_decisions.md
-│   ├── 03_preprocessing_strategy.md
-│   ├── 04_training_strategy.md
-│   ├── 05_experiments_log.md
-│   └── 06_assumptions_considerations.md
 ├── data/                           # Data directory
 │   ├── raw/                        # Original MM-IMDb dataset
 │   ├── processed/                  # Preprocessed data
@@ -68,9 +60,6 @@ ml-project/
 ├── models/                         # Saved models
 │   ├── checkpoints/                # Training checkpoints
 │   └── final/                      # Final trained models
-├── notebooks/                      # Jupyter notebooks
-│   ├── 01_data_exploration.ipynb
-│   └── 02_results_analysis.ipynb
 ├── src/                            # Source code
 │   ├── data/                       # Data processing
 │   │   ├── dataset.py             # PyTorch Dataset classes
@@ -428,14 +417,6 @@ trainer = Trainer(model, config, device)
 trainer.train(train_loader, val_loader)
 ```
 
-### Jupyter Notebooks
-
-Explore the data and results:
-
-```bash
-jupyter notebook notebooks/01_data_exploration.ipynb
-```
-
 ---
 
 ## 🧠 Models
@@ -466,16 +447,6 @@ jupyter notebook notebooks/01_data_exploration.ipynb
 ---
 
 ## 📚 Documentation
-
-Comprehensive documentation is available in the [`.docs/`](.docs/) directory:
-(to be uploaded ...)
-- **[Implementation Plan](.docs/plan.md)**: Complete 8-week implementation roadmap
-- **[Dataset Analysis](.docs/01_dataset_analysis.md)**: Dataset statistics and EDA
-- **[Architecture Decisions](.docs/02_architecture_decisions.md)**: Model design rationale
-- **[Preprocessing Strategy](.docs/03_preprocessing_strategy.md)**: Data preprocessing pipeline
-- **[Training Strategy](.docs/04_training_strategy.md)**: Training configuration and techniques
-- **[Experiments Log](.docs/05_experiments_log.md)**: All experiments and results
-- **[Assumptions & Considerations](.docs/06_assumptions_considerations.md)**: Edge cases and limitations
 
 ### API Documentation
 
@@ -581,6 +552,110 @@ training:
 
 ---
 
+## 📊 Results
+
+**Project Status**: ✅ **COMPLETE** - All experiments finished (November 27, 2025)
+
+### Final Model Performance (Test Set)
+
+| Rank | Model | F1-Macro | F1-Micro | ROC-AUC | Subset Acc. | Architecture |
+|------|-------|----------|----------|---------|-------------|--------------|
+| 1 | **Attention Fusion** | **59.79%** | 65.90% | **90.61%** | 17.97% | BERT + ResNet-18 + Cross-Attention |
+| 2 | **Late Fusion** | **59.43%** | 65.94% | 89.78% | **18.18%** | BERT + ResNet-18 + Learned Weighted Avg |
+| 3 | **Early Fusion** | **58.47%** | 64.82% | 88.99% | 16.99% | BERT + ResNet-18 + Concatenation |
+| 4 | **BERT Text** | **57.01%** | 64.74% | 88.38% | 18.46% | DistilBERT-base-uncased |
+| 5 | **LSTM Text** | **43.05%** | 53.39% | 82.70% | 9.40% | BiLSTM + Attention |
+| 6 | **ResNet Vision** | **29.73%** | 38.43% | 73.29% | 1.29% | ResNet-18 (pretrained) |
+| 7 | **CNN Vision** | **24.17%** | 29.85% | 68.14% | 0.03% | 4-Layer CNN (from scratch) |
+
+### Key Findings
+
+#### 1. **Multimodal Fusion Works** ✅
+- All three fusion strategies outperform unimodal approaches
+- **Best improvement**: +2.78 percentage points over best text-only model (BERT)
+- Consistent gains across all fusion strategies (Early, Late, Attention)
+
+#### 2. **Attention Fusion Wins** 🏆
+- **Best F1-Macro**: 59.79% (primary metric)
+- **Best ROC-AUC**: 90.61% (excellent ranking ability)
+- Cross-attention mechanism enables dynamic multimodal feature interaction
+- Outperforms simple concatenation (Early) by +1.32%
+
+#### 3. **Text Dominates, But Vision Adds Value** 📝
+- **BERT text-only**: 57.01% F1 (very competitive)
+- **ResNet vision-only**: 29.73% F1 (insufficient alone)
+- **Ratio**: Text is **1.92x more informative** than vision
+- Plot summaries contain definitive genre information; posters provide visual refinement
+
+#### 4. **Transfer Learning is Essential** 🚀
+- **BERT vs LSTM**: +13.96 percentage points (32.4% relative improvement)
+- **ResNet vs CNN**: +5.56 percentage points (23.0% relative improvement)
+- Pretrained models critical for both text and vision modalities
+
+#### 5. **Multi-Label Classification is Challenging** 🎯
+- **Best Subset Accuracy**: Only 18.18% (Late Fusion)
+- Predicting exact genre combinations much harder than individual genres
+- 23 genres → 2²³ = 8.4M possible combinations
+- High F1-Macro (59.79%) but low subset accuracy indicates partial correctness
+
+### Per-Genre Performance (Attention Fusion - Best Model)
+
+**Top Performing Genres** (F1 > 70%):
+- 🥇 **Adventure**: 78.90% F1 - Strong visual cues (landscapes), distinctive plots
+- 🥈 **Drama**: 78.67% F1 - Largest class (2130 samples), well-represented
+- 🥉 **Sport**: 73.64% F1 - Distinctive visuals (stadiums), specific vocabulary
+- **Western**: 71.66% F1 - Iconic visual identity, era-specific language
+- **Crime**: 71.02% F1 - Narrative structure markers
+- **Mystery**: 70.37% F1 - Plot-driven, clear textual cues
+
+**Challenging Genres** (F1 < 50%):
+- **Short**: 33.00% F1 (50 samples) - Format label, not content-based genre
+- **Musical**: 36.91% F1 (121 samples) - Visual cues not always on posters
+- **Film-Noir**: 41.32% F1 (69 samples) - Small class, vintage aesthetic
+- **History**: 42.25% F1 (147 samples) - Overlaps with War, Biography, Drama
+
+### Model Comparisons
+
+**Fusion Strategy Comparison**:
+```
+Attention Fusion:  59.79% F1 │████████████████████░│ Cross-attention, dynamic interaction
+Late Fusion:       59.43% F1 │████████████████████░│ Learned weighting, modular
+Early Fusion:      58.47% F1 │███████████████████░░│ Concatenation, simple
+```
+
+**Modality Contribution**:
+```
+Text (BERT):       57.01% F1 │███████████████████░░│ 70-80% of predictive power
+Vision (ResNet):   29.73% F1 │██████████░░░░░░░░░░░│ 20-30% complementary refinement
+```
+
+### Reproducing Best Model
+
+```bash
+# Train attention fusion model (best performance)
+python scripts/train.py --model attention_fusion --config config.yaml --num-epochs 50
+
+# Evaluate on test set
+python scripts/evaluate.py --checkpoint checkpoints/attention_fusion/best.pth --config config.yaml --split test
+
+# Expected results:
+# F1-Macro: 59.79%
+# ROC-AUC: 90.61%
+# Training time: ~4 hours (GPU)
+```
+
+### Research Contributions
+
+1. **Comprehensive Fusion Comparison**: First systematic comparison of Early, Late, and Attention fusion on MM-IMDb with modern pretrained models (BERT, ResNet)
+
+2. **Modality Imbalance Analysis**: Demonstrated that fusion improves performance even when one modality dominates (text 1.92x better than vision)
+
+3. **Architecture Insights**: Showed that simple Late Fusion is surprisingly competitive (99.4% of Attention Fusion performance)
+
+4. **Loss Function Guidance**: Documented architecture-dependent loss function effectiveness (Focal Loss for LSTM, Weighted BCE for BERT)
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please follow these steps:
@@ -646,13 +721,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] Text models (LSTM, DistilBERT)
 - [x] Vision models (ResNet, Custom CNN)
 - [x] Fusion models (Early, Late, Attention)
-- [ ] Training infrastructure
-- [ ] Evaluation metrics
-- [ ] Baseline models (Optional)
-- [ ] Experiment tracking
-- [ ] Results analysis
-- [ ] Report writing
+- [x] Training infrastructure
+- [x] Evaluation metrics
+- [x] Experiment tracking (TensorBoard)
+- [x] Results analysis and visualization
+- [x] All experiments completed
+- [x] Documentation for thesis writing
+- [ ] Final thesis report writing (in progress)
 
 ---
 
-**Last Updated**: November 2025
+**Last Updated**: November 27, 2025
+**Project Status**: ✅ **COMPLETE** - All experiments finished, ready for thesis writing

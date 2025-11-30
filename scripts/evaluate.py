@@ -104,7 +104,7 @@ def parse_args():
     parser.add_argument(
         '--threshold',
         type=float,
-        default=0.5,
+        default=0.28,
         help='Classification threshold'
     )
 
@@ -154,11 +154,15 @@ def evaluate_model(model, dataloader, device):
             # Multimodal
             if 'attention_mask' in batch:
                 outputs = model(
-                    text_input={'input_ids': batch['text'], 'attention_mask': batch['attention_mask']},
-                    image_input=batch['image']
+                    text_input=batch['text'],
+                    image_input=batch['image'],
+                    text_attention_mask=batch['attention_mask']
                 )
             else:
-                outputs = model(text_input=batch['text'], image_input=batch['image'])
+                outputs = model(
+                    text_input=batch['text'],
+                    image_input=batch['image']
+                )
         elif 'text' in batch:
             # Text-only
             if 'attention_mask' in batch:
@@ -208,7 +212,21 @@ def main():
 
     # Load checkpoint
     print(f"\nLoading checkpoint from {args.checkpoint}...")
-    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
+
+    # Fix for cross-platform path issues (PosixPath on Windows)
+    import pathlib
+    import platform
+    if platform.system() == 'Windows':
+        # Temporarily change PosixPath to WindowsPath for loading
+        temp = pathlib.PosixPath
+        pathlib.PosixPath = pathlib.WindowsPath
+
+    try:
+        checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    finally:
+        if platform.system() == 'Windows':
+            # Restore PosixPath
+            pathlib.PosixPath = temp
 
     # Infer model type from checkpoint path
     checkpoint_path = Path(args.checkpoint)
@@ -255,7 +273,11 @@ def main():
     # Prepare preprocessing
     vocab_or_tokenizer = None
     if is_text_only or is_multimodal:
-        if 'bert' in model_type:
+        # Determine if we need BERT or LSTM tokenizer
+        # For multimodal models, they use BERT (DistilBERT) as the text component
+        use_bert = 'bert' in model_type or is_multimodal
+
+        if use_bert:
             max_length = config['preprocessing']['text'].get('max_length_bert', 512)
             tokenizer = get_bert_tokenizer(
                 model_name=config['model_distilbert'].get('model_name', 'distilbert-base-uncased'),
@@ -263,6 +285,7 @@ def main():
             )
             vocab_or_tokenizer = tokenizer
             text_tokenizer_fn = tokenizer
+            print(f"Using BERT tokenizer (vocab size: 30522)")
         else:
             # LSTM - load actual vocabulary from processed data
             vocab_path = data_dir / 'vocab.json'
@@ -379,20 +402,51 @@ def main():
         vision_config['num_classes'] = num_classes
         vision_model = create_vision_model(vision_config)
 
-        fusion_config = config['model_early_fusion']
+        # Load the correct fusion config for each model type
+        if model_type == 'early_fusion':
+            fusion_config = config['model_early_fusion']
+        elif model_type == 'late_fusion':
+            fusion_config = config['model_late_fusion']
+        else:  # attention_fusion
+            fusion_config = config['model_attention_fusion']
 
         if model_type == 'early_fusion':
+            # EarlyFusionModel requires text_output_dim and vision_output_dim
             model = EarlyFusionModel(
-                text_model, vision_model, num_classes,
-                **{k: v for k, v in fusion_config.items() if k != 'strategy'}
+                text_model=text_model,
+                vision_model=vision_model,
+                text_output_dim=768,  # DistilBERT hidden size
+                vision_output_dim=512,  # ResNet feature size
+                num_classes=num_classes,  # Override with correct value from genre_mapping
+                **{k: v for k, v in fusion_config.items() if k not in ['strategy', 'type', 'text_model', 'vision_model', 'num_classes']}
             )
         elif model_type == 'late_fusion':
-            model = LateFusionModel(text_model, vision_model, num_classes,
-                                   fusion_strategy=fusion_config.get('strategy', 'average'))
-        else:
+            model = LateFusionModel(
+                text_model,
+                vision_model,
+                fusion_strategy=fusion_config.get('fusion_strategy', 'average'),
+                initial_alpha=fusion_config.get('alpha', 0.5)
+            )
+        else:  # attention_fusion
+            # AttentionFusionModel has different parameters
+            # Infer fusion_hidden_dim from checkpoint to match saved architecture
+            if 'classifier.0.weight' in checkpoint['model_state_dict']:
+                # The classifier first layer weight shape is [fusion_hidden_dim, text_dim + vision_dim]
+                inferred_fusion_hidden_dim = checkpoint['model_state_dict']['classifier.0.weight'].shape[0]
+                print(f"Inferred fusion_hidden_dim from checkpoint: {inferred_fusion_hidden_dim}")
+            else:
+                inferred_fusion_hidden_dim = fusion_config.get('fusion_hidden_dim', 512)
+
             model = AttentionFusionModel(
-                text_model, vision_model, num_classes,
-                **{k: v for k, v in fusion_config.items() if k != 'strategy'}
+                text_model=text_model,
+                vision_model=vision_model,
+                text_dim=768,  # DistilBERT hidden size
+                vision_dim=512,  # ResNet feature size
+                num_heads=fusion_config.get('num_heads', 8),
+                attention_dropout=fusion_config.get('attention_dropout', 0.1),
+                fusion_hidden_dim=inferred_fusion_hidden_dim,
+                num_classes=num_classes,
+                dropout=fusion_config.get('dropout', 0.3)
             )
 
     # Load model weights
