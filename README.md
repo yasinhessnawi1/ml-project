@@ -8,7 +8,9 @@ This project implements multimodal deep learning models for predicting movie gen
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 📋 Table of Contents
+## Report 
+[View the PDF](/Bachelor_s___Master_s_Thesis_Template_for_University_of_Agder__Norway%20(4).pdf)
+## Table of Contents
 
 - [Overview](#overview)
 - [Features](#features)
@@ -26,7 +28,7 @@ This project implements multimodal deep learning models for predicting movie gen
 
 ---
 
-## 🎯 Overview
+## Overview
 
 This project explores various deep learning architectures for multimodal genre classification:
 
@@ -38,7 +40,7 @@ This project explores various deep learning architectures for multimodal genre c
 
 ---
 
-## ✨ Features
+## Features
 
 - ✅ **Multiple Model Architectures**: Text-only, Vision-only, and Multimodal fusion models
 - ✅ **Flexible Configuration**: YAML-based configuration management
@@ -49,7 +51,7 @@ This project explores various deep learning architectures for multimodal genre c
 - ✅ **Reproducibility**: Seed setting, deterministic training
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 ml-project/
@@ -91,7 +93,7 @@ ml-project/
 
 ---
 
-## 🚀 Installation
+##  Installation
 
 ### Prerequisites
 
@@ -259,7 +261,7 @@ pip install -e .
 
 ---
 
-## ⚡ Quick Start
+##  Quick Start
 
 ### Download Dataset
 
@@ -329,7 +331,7 @@ python scripts/evaluate.py --model path/to/model.pt --split test
 
 ---
 
-## 📖 Usage
+## Usage
 
 ### Configuration
 
@@ -414,7 +416,7 @@ trainer.train(train_loader, val_loader)
 
 ---
 
-## 🧠 Models
+##  Models
 
 ### Text Models
 
@@ -441,7 +443,7 @@ trainer.train(train_loader, val_loader)
 
 ---
 
-## 📚 Documentation
+##  Documentation
 
 ### API Documentation
 
@@ -455,7 +457,7 @@ help(LSTMTextModel)  # View full documentation
 
 ---
 
-## 📊 Results
+##  Results
 
 Results will be saved to the `results/` directory:
 
@@ -483,7 +485,7 @@ results/
 
 ---
 
-## 🧪 Testing
+##  Testing
 
 Run implementation tests:
 
@@ -532,7 +534,7 @@ training:
 
 ---
 
-## 📊 Results
+##  Results
 
 **Project Status**: ✅ **COMPLETE** - All experiments finished (November 15, 2025)
 
@@ -550,7 +552,7 @@ training:
 
 ### Key Findings
 
-#### 1. **Multimodal Fusion Works** ✅
+#### 1. **Multimodal Fusion Works** 
 - All three fusion strategies outperform unimodal approaches
 - **Best improvement**: +2.78 percentage points over best text-only model (BERT)
 - Consistent gains across all fusion strategies (Early, Late, Attention)
@@ -561,7 +563,7 @@ training:
 - Cross-attention mechanism enables dynamic multimodal feature interaction
 - Outperforms simple concatenation (Early) by +1.32%
 
-#### 3. **Text Dominates, But Vision Adds Value** 📝
+#### 3. **Text Dominates, But Vision Adds Value** 
 - **BERT text-only**: 57.01% F1 (very competitive)
 - **ResNet vision-only**: 29.73% F1 (insufficient alone)
 - **Ratio**: Text is **1.92x more informative** than vision
@@ -572,7 +574,7 @@ training:
 - **ResNet vs CNN**: +5.56 percentage points (23.0% relative improvement)
 - Pretrained models critical for both text and vision modalities
 
-#### 5. **Multi-Label Classification is Challenging** 🎯
+#### 5. **Multi-Label Classification is Challenging** 
 - **Best Subset Accuracy**: Only 18.18% (Late Fusion)
 - Predicting exact genre combinations much harder than individual genres
 - 23 genres → 2²³ = 8.4M possible combinations
@@ -636,7 +638,7 @@ python scripts/evaluate.py --checkpoint checkpoints/attention_fusion/best.pth --
 
 ---
 
-## 📝 Citation
+## Citation
 
 If you want to use this code in your research, and wants to cite (no need):
 
@@ -652,13 +654,12 @@ If you want to use this code in your research, and wants to cite (no need):
 
 ---
 
-## 📄 License
+## License
 
-This project is not a big deal but its licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
+This project is not a big deal but its licensed under the MIT License
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **MM-IMDb Dataset**: [Arevalo et al.](https://arxiv.org/abs/1701.06647)
 - **PyTorch**: Deep learning framework
@@ -667,7 +668,7 @@ This project is not a big deal but its licensed under the MIT License - see the 
 
 ---
 
-## 📧 Contact
+## Contact
 
 **Yasin Hessnawi**
 - GitHub: [@yasinhessnawi1](https://github.com/yasinhessnawi1)
@@ -678,7 +679,7 @@ This project is not a big deal but its licensed under the MIT License - see the 
 
 ---
 
-## 🗺️ Roadmap followed
+## Roadmap followed
 
 - [x] Project structure
 - [x] Data preprocessing pipeline
